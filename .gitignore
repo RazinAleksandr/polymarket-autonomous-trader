@@ -1,0 +1,45 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# Environment
+.env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Data
+*.db
+*.sqlite
+.live-gate-pass
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# GSD / Taches (submodules)
+get-shit-done/
+taches-cc-resources/
+
+# Claude (settings, cache, worktrees, etc.)
+.claude/*
+# But allow agent definition files (sub-agent prompts are code)
+!.claude/agents/
+!.claude/CLAUDE.md
+!.claude/TOOLKIT-GUIDE.md
+
+# Agent cycle intermediate data (ephemeral)
+state/cycles/*/
+!state/cycles/.gitkeep
