@@ -1,8 +1,8 @@
-# Roadmap: Polymarket Autonomous Trading Agent v2
+# Roadmap: Polymarket Autonomous Trading Agent v2 (Single Agent)
 
 ## Overview
 
-Build a two-layer autonomous trading system from the ground up: first a hardened Python instrument layer of stateless CLI tools the agent can call via Bash, then a multi-agent Claude Code layer (Scanner, Analyst, Risk Manager, Planner, Reviewer sub-agents) that calls those tools, then the strategy evolution feedback loop that makes the system self-improving, and finally scheduling and safety hardening that makes it safe to run unattended. Each phase delivers something independently verifiable before the next begins.
+Transform the working multi-agent trading system into a single autonomous Claude trader that reads its own knowledge base, makes all decisions in one session, and evolves its strategy through experience. The existing 11 CLI tools and SQLite persistence are kept as-is -- we restructure how Claude operates (single agent, skills, knowledge files) and add new tools for calibration tracking and market intelligence. Each phase delivers something independently verifiable before the next begins.
 
 ## Phases
 
@@ -12,86 +12,91 @@ Build a two-layer autonomous trading system from the ground up: first a hardened
 
 Decimal phases appear between their surrounding integers in numeric order.
 
-- [ ] **Phase 1: Instrument Layer** - Stateless Python CLI tools for market data, order execution, and portfolio tracking
-- [ ] **Phase 2: Agent Layer** - Multi-agent orchestration with 5 specialized Claude Code sub-agents
-- [ ] **Phase 3: Strategy Evolution** - Self-improving strategy document with per-cycle reports and git versioning
-- [ ] **Phase 4: Scheduling and Safety Hardening** - Cron/APScheduler cycle triggering, live trading gate, credential refresh
+- [ ] **Phase 1: Single Agent Architecture** - Replace sub-agent pipeline with single autonomous trader session and skill reference docs
+- [ ] **Phase 2: Knowledge Base** - Transplant battle-tested knowledge from polymarket_claude and seed Claude's learning files
+- [ ] **Phase 3: New Instrument Tools** - Market intelligence, calibration tracking, heartbeat signal generator
+- [ ] **Phase 4: Config and Integration** - Remove OpenAI dependency, widen parameters, heartbeat-gated cycle launcher
+- [ ] **Phase 5: Autonomous Cycle Validation** - Manual validation cycles proving single-agent behavior works end-to-end
+- [ ] **Phase 6: Scheduling and Paper Validation** - Heartbeat-gated cron, extended autonomous paper trading, live gate enhancement
 
 ## Phase Details
 
-### Phase 1: Instrument Layer
-**Goal**: Operators can call stateless Python CLI tools that fetch markets, price data, execute trades, and track positions — with all critical edge cases hardened before any agent touches them
+### Phase 1: Single Agent Architecture
+**Goal**: Claude operates as one autonomous trader per session -- no sub-agent spawning -- loading skill reference documents on demand to guide analysis, sizing, and learning
 **Depends on**: Nothing (first phase)
-**Requirements**: INST-01, INST-02, INST-03, INST-04, INST-05, INST-06, INST-07, INST-08, INST-09, INST-10, INST-11, INST-12, INST-13
+**Requirements**: ARST-01, ARST-02, ARST-03, ARST-04, ARST-05
 **Success Criteria** (what must be TRUE):
-  1. Running `python tools/discover_markets.py` returns a JSON list of active Polymarket markets filtered by volume, liquidity, and price range
-  2. Running `python tools/execute_trade.py` in paper mode records a simulated fill priced at ask (buy) or bid (sell) using live orderbook data — not mid-price
-  3. Running `python tools/get_portfolio.py` returns current open positions with unrealized P&L calculated from live prices
-  4. Running any tool with invalid arguments prints a usage error to stderr and exits with non-zero code; SIGINT during execution completes the current operation cleanly before exit
-  5. All tool output and errors are written to both console (human-readable) and a structured JSON log file; all parameters (edge threshold, Kelly fraction, max position, max exposure) are read from `.env`
-**Plans:** 6 plans
-
-Plans:
-- [x] 01-01-PLAN.md — Foundation: lib/ package (config, models, db, logging, signals, errors) + test infra
-- [x] 01-02-PLAN.md — Market data and pricing: Gamma API client, CLOB API pricing, discover_markets + get_prices tools
-- [x] 01-03-PLAN.md — Strategy math: Kelly criterion, edge calculation, calculate_edge + calculate_kelly tools
-- [x] 01-04-PLAN.md — Trade execution: paper + live trading, execute_trade tool
-- [x] 01-05-PLAN.md — Portfolio tracking: positions, P&L, resolved markets, get_portfolio + check_resolved tools
-- [x] 01-06-PLAN.md — V1 cleanup: delete legacy files, .env.example, integration verification
-
-### Phase 2: Agent Layer
-**Goal**: A main Claude Code agent can run a complete trading cycle — dispatching Scanner, Analyst, Risk Manager, Planner, and Reviewer sub-agents — that discovers markets, estimates probabilities, sizes positions, executes paper trades, and writes a cycle report
-**Depends on**: Phase 1
-**Requirements**: AGNT-01, AGNT-02, AGNT-03, AGNT-04, AGNT-05, AGNT-06, AGNT-07, AGNT-08, AGNT-09, AGNT-10
-**Success Criteria** (what must be TRUE):
-  1. Running the main agent cycle produces a cycle report in `state/reports/` listing markets considered, trades taken (or skipped), probability estimates, and reasoning for each decision
-  2. Each sub-agent (Scanner, Analyst, Risk Manager, Planner, Reviewer) returns a structured JSON object matching its defined output schema — not prose — which the main agent parses without error
-  3. The Analyst sub-agent runs a Bull/Bear debate for each candidate market and includes both perspectives in its probability estimate output
-  4. The Risk Manager sub-agent detects when two open positions resolve on correlated outcomes and reduces combined sizing below the single-position maximum
-  5. No sub-agent exceeds its configured `max_turns` limit; the main agent logs total token cost at cycle end
+  1. The `.claude/agents/` directory no longer exists and no code references sub-agent spawning via Task tool
+  2. Running `ls .claude/skills/` shows 6 skill documents (evaluate-edge.md, size-position.md, resolution-parser.md, post-mortem.md, calibration-check.md, cycle-review.md) each containing a structured analytical framework
+  3. The `.claude/CLAUDE.md` file describes a 5-phase trading cycle (Check Positions, Find Opportunities, Analyze Markets, Size and Execute, Learn and Evolve) with explicit instructions for Claude to read strategy.md, core-principles.md, and last 3 cycle reports at session start
+  4. Claude Code session launched with the new CLAUDE.md can read files, execute bash commands, search the web, and write/edit files without permission errors
 **Plans**: TBD
-**UI hint**: no
 
-### Phase 3: Strategy Evolution
-**Goal**: After each trading cycle, the main agent updates `state/strategy.md` based on Reviewer analysis, creating an auditable history of strategy changes that the agent reads at the start of every subsequent cycle
-**Depends on**: Phase 2
-**Requirements**: STRT-01, STRT-02, STRT-03, STRT-04, STRT-05, STRT-06, STRT-07
+### Phase 2: Knowledge Base
+**Goal**: Claude starts every session with transplanted trading wisdom -- battle-tested rules from real losses, category-specific playbooks, and accuracy tracking structures -- rather than learning everything from zero
+**Depends on**: Phase 1
+**Requirements**: KNOW-01, KNOW-02, KNOW-03, KNOW-04, KNOW-05, KNOW-06, KNOW-07
 **Success Criteria** (what must be TRUE):
-  1. `state/strategy.md` starts as a blank document and after the first cycle contains the agent's initial observations written by the main agent — no pre-seeded rules
-  2. After each cycle, `state/strategy.md` is updated and a new dated git commit is created, so running `git log state/strategy.md` shows one commit per completed cycle
-  3. The "Core Principles" section of `state/strategy.md` remains unchanged across cycles regardless of what the agent writes elsewhere in the document
-  4. Per-cycle markdown reports in `state/reports/` include: markets considered, trades taken, probability estimates, edge calculations, cycle P&L, and the agent's stated learnings
-  5. Running the main agent at cycle start reads the current `state/strategy.md` and the last 3 cycle reports, and the Planner sub-agent references specific strategy rules in its trade plan output
-**Plans:** 2 plans
+  1. `knowledge/golden-rules.md` contains 10+ rules each citing a specific trade or loss that motivated the rule, organized by Pre-Trade, Sizing, Research, and Post-Trade sections
+  2. `knowledge/market-types/` contains playbooks for at least 5 categories (crypto, politics, sports, commodities, entertainment) each with base rates, edge sources, resolution mechanics, and category-specific rules
+  3. `knowledge/calibration.json` is valid JSON with global and per-category structure; `knowledge/strategies.md` and `knowledge/edge-sources.md` have lifecycle/tracking frameworks ready for Claude to populate
+  4. `state/strategy.md` contains only section headers (Market Selection, Analysis Approach, Risk Parameters, Trade Entry/Exit Rules, What I've Learned, Change Log) with no pre-seeded rules -- Claude writes all content
+  5. `state/core-principles.md` contains only immutable guardrails (paper default, max position %, gate requirements, no history deletion) and nothing Claude should be able to evolve
+**Plans**: TBD
 
-Plans:
-- [x] 03-01-PLAN.md — Foundation: schema validation, state files (strategy.md + core-principles.md), Strategy Updater agent, tests
-- [ ] 03-02-PLAN.md — Pipeline integration: extend trading-cycle.md with Step 7 (Strategy Update) and core-principles.md reading
+### Phase 3: New Instrument Tools
+**Goal**: Claude has Python CLI tools for macro market intelligence and calibration tracking that existing tools lack, plus a lightweight heartbeat script for scheduling
+**Depends on**: Phase 1
+**Requirements**: TOOL-01, TOOL-02, TOOL-03, TOOL-04, TOOL-05, TOOL-06
+**Success Criteria** (what must be TRUE):
+  1. Running `python tools/get_market_intel.py --category crypto` returns JSON with macro regime, sentiment indicators, and recent news; running with `--overview` returns cross-category summary
+  2. Running `python tools/record_outcome.py --market-id X --stated-prob 0.65 --actual WIN --category crypto` returns JSON with Brier score and error in percentage points, and appends to calibration database
+  3. Running `python scripts/heartbeat.py` reads local state files (no API calls, no LLM) and writes `state/signal.json` with action flags (scan_needed, resolve_needed, learn_needed) based on timestamp staleness and position status
+  4. All existing tests pass (`pytest tests/` exits 0) with no regressions from new code additions
+**Plans**: TBD
 
-### Phase 4: Scheduling and Safety Hardening
-**Goal**: The system runs unattended on a configurable schedule, refreshes expired CLOB credentials automatically, and requires explicit multi-step confirmation before any live trade is placed
+### Phase 4: Config and Integration
+**Goal**: The system no longer depends on OpenAI for analysis, trading parameters are widened for Claude's broader analytical capability, and the cycle launcher respects heartbeat signals
 **Depends on**: Phase 3
-**Requirements**: SAFE-01, SAFE-02, SAFE-03, SAFE-04, SAFE-05, STRT-07
+**Requirements**: CONF-01, CONF-02, CONF-03, CONF-04
 **Success Criteria** (what must be TRUE):
-  1. A cron entry or APScheduler daemon triggers full trading cycles at a configurable interval; the cycle log shows the scheduled start time and completion time for each run
-  2. When the CLOB API returns a 401 response during a cycle, the system re-derives L2 credentials and retries the request without failing the cycle
-  3. Attempting to enable live trading with `PAPER_TRADING=false` in `.env` produces a confirmation prompt that displays current paper P&L, requires typing "CONFIRM LIVE" to proceed, and blocks live trading if paper P&L across the configured minimum cycle count is negative
-  4. Paper mode order fills are priced at ask (buys) and bid (sells) from the live orderbook — not at mid-price — and order sizes are normalized to max 2 decimal places with minimum 5 USDC notional before any order is recorded or placed
-**Plans:** 3 plans
+  1. No Python import of `openai` exists anywhere in the codebase; `.env.example` does not list OPENAI_API_KEY; Claude performs all market analysis directly
+  2. `.env.example` lists ALPHA_VANTAGE_API_KEY and new widened parameters (MAX_RESOLUTION_DAYS=14, MIN_EDGE_THRESHOLD=0.04, position sizing as bankroll percentage)
+  3. Running `scripts/run_cycle.sh` when `state/signal.json` contains `{"scan_needed": false, "resolve_needed": false, "learn_needed": false}` exits immediately without launching a Claude session
+  4. Running `scripts/run_cycle.sh` when `state/signal.json` contains any true flag launches a Claude session that reads the appropriate context for that signal type
+**Plans**: TBD
 
-Plans:
-- [x] 04-01-PLAN.md — Safety core: Config extensions, 401 credential refresh, gate-pass check, DataStore cycle stats
-- [x] 04-02-PLAN.md — Scheduling: cron wrapper script with PID lockfile, crontab setup tool
-- [x] 04-03-PLAN.md — Live trading gate tool and safety verification tests (SAFE-01 through SAFE-05)
+### Phase 5: Autonomous Cycle Validation
+**Goal**: Claude runs complete trading cycles as a single agent -- scanning markets, analyzing with web search, sizing positions, executing trades, writing reports, and updating its own strategy -- proving the architecture works before automation
+**Depends on**: Phase 2, Phase 4
+**Requirements**: AVAL-01, AVAL-02, AVAL-03
+**Success Criteria** (what must be TRUE):
+  1. A manually triggered cycle produces: a cycle report in `state/reports/`, updated `state/strategy.md` with Claude's own observations, and (if trades were taken) entries in the SQLite database -- all from one Claude session without sub-agent spawning
+  2. Claude's cycle report references specific knowledge base content (golden rules applied, calibration data checked, category playbook consulted) showing it reads and uses its own knowledge
+  3. After 5+ manual cycles, Claude has added at least one new rule to golden-rules.md or updated calibration.json based on observed outcomes, demonstrating the self-improvement loop works
+**Plans**: TBD
+
+### Phase 6: Scheduling and Paper Validation
+**Goal**: The system runs unattended via heartbeat-gated cron, accumulates 20+ paper trading cycles with measurable calibration improvement, and the live trading gate checks calibration health before allowing real money
+**Depends on**: Phase 5
+**Requirements**: SCHD-01, SCHD-02, SCHD-03, SCHD-04
+**Success Criteria** (what must be TRUE):
+  1. Crontab shows heartbeat running every 10 minutes and trading cycle running every 30 minutes; a daily forced full cycle runs at the configured time; `state/signal.json` is updated by heartbeat without any LLM API calls
+  2. After 20+ autonomous cycles: `knowledge/calibration.json` has per-category accuracy data, `knowledge/golden-rules.md` has rules beyond the initial seed, and `state/strategy.md` contains evidence-backed trading decisions written by Claude
+  3. Running `python tools/enable_live.py --check` verifies calibration health (no category worse than -20pp error) in addition to existing cycle count and P&L requirements; the gate blocks live trading if calibration is unhealthy
+**Plans**: TBD
 
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 1 → 2 → 3 → 4
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+(Phase 2 and Phase 3 can execute in parallel after Phase 1)
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Instrument Layer | 0/6 | Planning complete | - |
-| 2. Agent Layer | 0/TBD | Not started | - |
-| 3. Strategy Evolution | 0/2 | Planning complete | - |
-| 4. Scheduling and Safety Hardening | 0/3 | Planning complete | - |
+| 1. Single Agent Architecture | 0/TBD | Not started | - |
+| 2. Knowledge Base | 0/TBD | Not started | - |
+| 3. New Instrument Tools | 0/TBD | Not started | - |
+| 4. Config and Integration | 0/TBD | Not started | - |
+| 5. Autonomous Cycle Validation | 0/TBD | Not started | - |
+| 6. Scheduling and Paper Validation | 0/TBD | Not started | - |

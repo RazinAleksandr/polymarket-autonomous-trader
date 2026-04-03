@@ -1,58 +1,58 @@
-# Requirements: Polymarket Autonomous Trading Agent v2
+# Requirements: Polymarket Autonomous Trading Agent v2 (Single Agent)
 
-**Defined:** 2025-03-25
-**Core Value:** The agent must autonomously trade, analyze its own performance, and improve its strategy over time — no human intervention required between scheduled cycles.
+**Defined:** 2026-04-03
+**Core Value:** Claude operates as a single autonomous trader that reads its own knowledge base, makes all trading decisions, and evolves its own strategy -- no sub-agent pipeline, no human intervention between scheduled cycles.
 
 ## v1 Requirements
 
-Requirements for initial release. Each maps to roadmap phases.
+Requirements for v2 single-agent release. Each maps to roadmap phases.
 
-### Instrument Layer
+### Agent Restructure
 
-- [x] **INST-01**: Python CLI tool fetches active markets from Gamma API filtered by volume, liquidity, and price range
-- [x] **INST-02**: Python CLI tool retrieves current orderbook prices for a given market from CLOB API
-- [x] **INST-03**: Python CLI tool calculates edge (estimated probability - market price) for a given market
-- [x] **INST-04**: Python CLI tool computes Kelly criterion position size given edge, probability, and bankroll
-- [x] **INST-05**: Python CLI tool executes paper trades (records simulated fills with configurable spread)
-- [x] **INST-06**: Python CLI tool executes live trades via py-clob-client (GTC limit orders, signature_type=0)
-- [x] **INST-07**: Python CLI tool tracks open positions with unrealized/realized P&L
-- [x] **INST-08**: Python CLI tool detects resolved markets and finalizes P&L automatically
-- [x] **INST-09**: Python CLI tool handles negative-risk markets (separate exchange contract)
-- [x] **INST-10**: SQLite persistence stores trades, positions, decisions, market snapshots, and strategy metrics
-- [x] **INST-11**: All parameters configurable via .env file (edge threshold, Kelly fraction, max position, max exposure, loop interval)
-- [x] **INST-12**: Graceful shutdown on SIGINT/SIGTERM — finishes current operation before exit
-- [x] **INST-13**: Dual logging — human-readable console + structured JSON file
+- [ ] **ARST-01**: Delete `.claude/agents/` directory (8 sub-agent files) and replace multi-agent pipeline with single-agent session architecture
+- [ ] **ARST-02**: Create `.claude/skills/` directory with 6 skill reference documents that Claude loads on demand during analysis (evaluate-edge, size-position, resolution-parser, post-mortem, calibration-check, cycle-review)
+- [ ] **ARST-03**: Rewrite `.claude/CLAUDE.md` as single autonomous trader instructions covering 5 cycle phases (Check Positions, Find Opportunities, Analyze Markets, Size and Execute, Learn and Evolve)
+- [ ] **ARST-04**: Verify `.claude/settings.json` allows bash execution, file read/write/edit, and web search tools
+- [ ] **ARST-05**: Single agent reads `state/strategy.md`, `state/core-principles.md`, and last 3 cycle reports at session start before any trading decisions
 
-### Agent Layer
+### Knowledge Base
 
-- [x] **AGNT-01**: Main agent reads strategy.md at cycle start and orchestrates sub-agents via Claude Code Task tool
-- [x] **AGNT-02**: Scanner sub-agent calls instrument tools to find and filter candidate markets, returns ranked list
-- [x] **AGNT-03**: Analyst sub-agent deep-dives each candidate market using web search, estimates probability with confidence score
-- [x] **AGNT-04**: Analyst sub-agent runs Bull/Bear debate — one persona argues for the trade, one against — to surface risks
-- [x] **AGNT-05**: Risk Manager sub-agent evaluates portfolio context, checks exposure limits, sizes positions via Kelly with confidence weighting
-- [x] **AGNT-06**: Risk Manager sub-agent detects correlated market exposure and adjusts sizing to avoid concentration risk
-- [x] **AGNT-07**: Planner sub-agent reads strategy + Scanner/Analyst/Risk Manager outputs, creates concrete trade plan for the cycle
-- [x] **AGNT-08**: Reviewer sub-agent analyzes cycle results — trades taken, reasoning, outcomes, what to improve
-- [x] **AGNT-09**: Sub-agents return structured JSON output with defined schemas for reliable inter-agent data passing
-- [x] **AGNT-10**: Each sub-agent has max_turns limit to prevent token cost runaway
+- [ ] **KNOW-01**: Transplant `knowledge/golden-rules.md` from polymarket_claude with 10+ battle-tested rules including loss citations
+- [ ] **KNOW-02**: Create `knowledge/market-types/` with 5+ category playbooks (crypto, politics, sports, commodities, entertainment) transplanted from polymarket_claude
+- [ ] **KNOW-03**: Create `knowledge/calibration.json` as empty seed structure that Claude fills with accuracy data per category after each trade resolution
+- [ ] **KNOW-04**: Create `knowledge/strategies.md` with strategy lifecycle tracking (PERFORMING, TESTING, UNDERPERFORMING, RETIRED statuses)
+- [ ] **KNOW-05**: Create `knowledge/edge-sources.md` for tracking where profitable edge comes from (Confirmed, Testing, Failed, Hypothesized)
+- [ ] **KNOW-06**: Rewrite `state/strategy.md` as minimal seed document (section headers only) that Claude builds from scratch through trading experience
+- [ ] **KNOW-07**: Simplify `state/core-principles.md` to only true immutable guardrails (max 5% per position, paper default, gate requirements, no deletion of history)
 
-### Strategy & Reporting
+### New Instrument Tools
 
-- [x] **STRT-01**: Strategy starts as blank markdown document — no pre-seeded rules
-- [x] **STRT-02**: Main agent updates strategy.md after each cycle based on Reviewer analysis
-- [x] **STRT-03**: Strategy covers four domains: market selection rules, analysis approach, risk parameters, trade entry/exit rules
-- [x] **STRT-04**: Strategy has locked "Core Principles" section that cannot be overwritten by the agent
-- [x] **STRT-05**: Per-cycle markdown report written by Reviewer to reports/ directory with trades, reasoning, results, learnings
-- [x] **STRT-06**: Strategy evolution history preserved — each update creates dated snapshot via git versioning
-- [x] **STRT-07**: Configurable scheduling via cron or APScheduler (hourly, daily, custom interval)
+- [ ] **TOOL-01**: `lib/market_intel.py` fetches macro regime, news sentiment, and market signals from external APIs (Alpha Vantage, Fear and Greed)
+- [ ] **TOOL-02**: `tools/get_market_intel.py` CLI wrapper returns macro context JSON for a given category or market overview
+- [ ] **TOOL-03**: `lib/calibration.py` tracks prediction accuracy per category with Brier scores, calculates calibration corrections
+- [ ] **TOOL-04**: `tools/record_outcome.py` CLI tool records trade outcome to calibration database and returns accuracy metrics (Brier score, error in percentage points)
+- [ ] **TOOL-05**: `scripts/heartbeat.py` lightweight Python script (no LLM calls) that checks timestamps and positions, writes `state/signal.json` with action flags (scan_needed, resolve_needed, learn_needed)
+- [ ] **TOOL-06**: All existing 11 CLI tools continue to pass their tests after restructuring; no regressions in existing functionality
 
-### Safety
+### Config and Integration
 
-- [x] **SAFE-01**: Paper trading is the default mode — live trading requires explicit .env configuration change
-- [x] **SAFE-02**: Paper mode simulates realistic spreads (not perfect fills) to prevent false edge measurement
-- [x] **SAFE-03**: Live trading gate — system requires positive paper P&L over configurable N cycles before allowing live mode
-- [x] **SAFE-04**: CLOB API credential refresh on 401 responses (L2 credentials expire)
-- [x] **SAFE-05**: Order amount normalization (max 2 decimal places for sell orders, minimum 5 USDC notional)
+- [ ] **CONF-01**: Remove OpenAI API dependency from analysis pipeline (Claude replaces GPT-4o for all market analysis)
+- [ ] **CONF-02**: Add Alpha Vantage API key configuration for market intelligence tool
+- [ ] **CONF-03**: Widen trading parameters: MAX_RESOLUTION_DAYS from 3 to 14, MIN_EDGE_THRESHOLD from 0.10 to 0.04, position sizing as bankroll percentage instead of fixed dollar amount
+- [ ] **CONF-04**: Enhance `scripts/run_cycle.sh` to check `state/signal.json` before launching Claude session (heartbeat gating -- skip if no signals)
+
+### Autonomous Validation
+
+- [ ] **AVAL-01**: Run first autonomous cycle where Claude reads knowledge base, uses skills for analysis, makes trade decisions, writes cycle report, and updates strategy.md -- all in one session without sub-agents
+- [ ] **AVAL-02**: Claude makes contextual decisions that reference its knowledge base (e.g., "passing on this edge because my calibration in this category is poor") rather than following fixed rules
+- [ ] **AVAL-03**: After 5+ manual validation cycles, all tool integration issues are resolved and cycle completion rate is above 90%
+
+### Scheduling and Operations
+
+- [ ] **SCHD-01**: Heartbeat cron runs every 10 minutes writing signal.json; trading cycle cron runs every 30 minutes gated by heartbeat signals
+- [ ] **SCHD-02**: Daily forced full cycle at configurable time (default 2 AM UTC) regardless of heartbeat signals
+- [ ] **SCHD-03**: After 20+ autonomous paper cycles: calibration.json populated, golden-rules.md expanded with new rules from real experiences, strategy.md contains evidence-backed decisions
+- [ ] **SCHD-04**: Live trading gate verifies calibration health (no category worse than -20pp error) in addition to existing cycle count and P&L requirements
 
 ## v2 Requirements
 
@@ -68,6 +68,7 @@ Deferred to future release. Tracked but not in current roadmap.
 
 - **OPS-01**: Multi-exchange support (Kalshi, Metaculus)
 - **OPS-02**: Automated performance dashboards
+- **OPS-03**: Context compression for long sessions (from Vibe-Trading pattern)
 
 ## Out of Scope
 
@@ -77,12 +78,11 @@ Explicitly excluded. Documented to prevent scope creep.
 |---------|--------|
 | Web UI / dashboard | CLI/file-based only. Markdown reports are the visibility layer. |
 | Real-time streaming / WebSocket feeds | Batch-cycle architecture. Snapshots at cycle start are sufficient. |
-| Backtesting engine | Paper trading IS the validation environment. Historical data is sparse. |
-| Human approval per trade | Eliminates autonomous value. Strategy doc + reports provide transparency. |
+| Backtesting engine | Paper trading IS the validation environment. |
+| Human approval per trade | Eliminates autonomous value. Knowledge files provide transparency. |
 | Reinforcement learning / model fine-tuning | Strategy document evolution replaces ML infrastructure. |
-| Copy trading / whale following | Conflicts with building analytical edge. |
-| Social media scraping | Analyst sub-agent's web search covers relevant signals. |
-| Per-trade stop-loss / take-profit | Binary markets resolve at resolution date. Conservative sizing is the risk control. |
+| Sub-agent pipeline | Single-agent architecture -- Claude sees everything in one session. |
+| OpenAI / GPT-4o dependency | Claude IS the AI. No external LLM needed. |
 | Cross-exchange arbitrage | Extreme complexity for marginal gain. |
 
 ## Traceability
@@ -91,47 +91,41 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| INST-01 | Phase 1 | Complete |
-| INST-02 | Phase 1 | Complete |
-| INST-03 | Phase 1 | Complete |
-| INST-04 | Phase 1 | Complete |
-| INST-05 | Phase 1 | Complete |
-| INST-06 | Phase 1 | Complete |
-| INST-07 | Phase 1 | Complete |
-| INST-08 | Phase 1 | Complete |
-| INST-09 | Phase 1 | Complete |
-| INST-10 | Phase 1 | Complete |
-| INST-11 | Phase 1 | Complete |
-| INST-12 | Phase 1 | Complete |
-| INST-13 | Phase 1 | Complete |
-| AGNT-01 | Phase 2 | Complete |
-| AGNT-02 | Phase 2 | Complete |
-| AGNT-03 | Phase 2 | Complete |
-| AGNT-04 | Phase 2 | Complete |
-| AGNT-05 | Phase 2 | Complete |
-| AGNT-06 | Phase 2 | Complete |
-| AGNT-07 | Phase 2 | Complete |
-| AGNT-08 | Phase 2 | Complete |
-| AGNT-09 | Phase 2 | Complete |
-| AGNT-10 | Phase 2 | Complete |
-| STRT-01 | Phase 3 | Complete |
-| STRT-02 | Phase 3 | Complete |
-| STRT-03 | Phase 3 | Complete |
-| STRT-04 | Phase 3 | Complete |
-| STRT-05 | Phase 3 | Complete |
-| STRT-06 | Phase 3 | Complete |
-| STRT-07 | Phase 4 | Complete |
-| SAFE-01 | Phase 1 | Complete |
-| SAFE-02 | Phase 1 | Complete |
-| SAFE-03 | Phase 4 | Complete |
-| SAFE-04 | Phase 4 | Complete |
-| SAFE-05 | Phase 1 | Complete |
+| ARST-01 | Phase 1 | Pending |
+| ARST-02 | Phase 1 | Pending |
+| ARST-03 | Phase 1 | Pending |
+| ARST-04 | Phase 1 | Pending |
+| ARST-05 | Phase 1 | Pending |
+| KNOW-01 | Phase 2 | Pending |
+| KNOW-02 | Phase 2 | Pending |
+| KNOW-03 | Phase 2 | Pending |
+| KNOW-04 | Phase 2 | Pending |
+| KNOW-05 | Phase 2 | Pending |
+| KNOW-06 | Phase 2 | Pending |
+| KNOW-07 | Phase 2 | Pending |
+| TOOL-01 | Phase 3 | Pending |
+| TOOL-02 | Phase 3 | Pending |
+| TOOL-03 | Phase 3 | Pending |
+| TOOL-04 | Phase 3 | Pending |
+| TOOL-05 | Phase 3 | Pending |
+| TOOL-06 | Phase 3 | Pending |
+| CONF-01 | Phase 4 | Pending |
+| CONF-02 | Phase 4 | Pending |
+| CONF-03 | Phase 4 | Pending |
+| CONF-04 | Phase 4 | Pending |
+| AVAL-01 | Phase 5 | Pending |
+| AVAL-02 | Phase 5 | Pending |
+| AVAL-03 | Phase 5 | Pending |
+| SCHD-01 | Phase 6 | Pending |
+| SCHD-02 | Phase 6 | Pending |
+| SCHD-03 | Phase 6 | Pending |
+| SCHD-04 | Phase 6 | Pending |
 
 **Coverage:**
-- v1 requirements: 35 total
-- Mapped to phases: 35
+- v1 requirements: 29 total
+- Mapped to phases: 29
 - Unmapped: 0
 
 ---
-*Requirements defined: 2025-03-25*
-*Last updated: 2026-03-26 after roadmap creation — all 35 requirements mapped*
+*Requirements defined: 2026-04-03*
+*Last updated: 2026-04-03 — all 29 requirements mapped to 6 phases*
