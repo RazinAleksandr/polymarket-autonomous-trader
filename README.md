@@ -1,5 +1,11 @@
 # Polymarket Autonomous Trading Agent
 
+![python](https://img.shields.io/badge/python-3.12-blue)
+![agent](https://img.shields.io/badge/agent-Claude_Code-orange)
+![license](https://img.shields.io/badge/license-MIT-green)
+![mode](https://img.shields.io/badge/mode-paper_+_live-grey)
+![chain](https://img.shields.io/badge/chain-Polygon-blueviolet)
+
 An AI agent that autonomously trades prediction markets on [Polymarket](https://polymarket.com) — discovering opportunities, estimating probabilities with web research, sizing positions via Kelly criterion, and evolving its own strategy from experience.
 
 Built as a two-layer system:
