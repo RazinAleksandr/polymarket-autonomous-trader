@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(ps aux:*)",
-      "Bash(tmux capture-pane:*)"
-    ]
-  }
-}

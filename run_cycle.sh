@@ -64,7 +64,7 @@ cat > "$RUNNER" <<EOF
 #!/usr/bin/env bash
 cd "$SCRIPT_DIR"
 echo "\$(date -u +%Y-%m-%dT%H:%M:%SZ) Claude starting..." >> "$CLAUDE_LOG"
-if env -i HOME="$HOME" PATH="$PATH" LANG="${LANG:-en_US.UTF-8}" SHELL="${SHELL:-/bin/bash}" USER="${USER:-$(whoami)}" TERM="${TERM:-xterm-256color}" \
+if env -i HOME="$HOME" PATH="$PATH" LANG="${LANG:-en_US.UTF-8}" SHELL="${SHELL:-/bin/bash}" USER="${USER:-$(whoami)}" TERM="${TERM:-xterm-256color}" IS_SANDBOX=1 \
   claude --dangerously-skip-permissions -p 'run a trading cycle' --verbose 2>&1 | tee -a "$CLAUDE_LOG"; then
     echo "\$(date -u +%Y-%m-%dT%H:%M:%SZ) Claude exited successfully" >> "$CLAUDE_LOG"
 else

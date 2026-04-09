@@ -1,9 +1,15 @@
+import json
 import os
 from dataclasses import dataclass, fields
+from datetime import datetime, timezone
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_BANKROLL_PATH = Path(__file__).resolve().parent.parent / "state" / "bankroll.json"
+_DEFAULT_BANKROLL = 10000.0
 
 
 @dataclass
@@ -12,10 +18,11 @@ class Config:
     min_volume_24h: float = 1000.0
     min_liquidity: float = 500.0
     max_markets_per_cycle: int = 10
-    min_edge_threshold: float = 0.10
+    min_edge_threshold: float = 0.04
     kelly_fraction: float = 0.25
-    max_position_size_usdc: float = 50.0
-    max_total_exposure_usdc: float = 200.0
+    max_position_pct: float = 0.05
+    max_exposure_pct: float = 0.30
+    max_resolution_days: int = 14
     db_path: str = "trading.db"
     log_level: str = "INFO"
     log_file: str = "trading.log"
@@ -35,8 +42,9 @@ _ENV_MAP = {
     "MAX_MARKETS_PER_CYCLE": "max_markets_per_cycle",
     "MIN_EDGE_THRESHOLD": "min_edge_threshold",
     "KELLY_FRACTION": "kelly_fraction",
-    "MAX_POSITION_SIZE_USDC": "max_position_size_usdc",
-    "MAX_TOTAL_EXPOSURE_USDC": "max_total_exposure_usdc",
+    "MAX_POSITION_PCT": "max_position_pct",
+    "MAX_EXPOSURE_PCT": "max_exposure_pct",
+    "MAX_RESOLUTION_DAYS": "max_resolution_days",
     "DB_PATH": "db_path",
     "LOG_LEVEL": "log_level",
     "LOG_FILE": "log_file",
@@ -84,3 +92,15 @@ def load_config(args=None) -> Config:
                 setattr(config, attr_name, attr_val)
 
     return config
+
+
+def load_bankroll(path: Path | None = None) -> dict:
+    """Load bankroll from state/bankroll.json. Returns safe default if missing/corrupt."""
+    bp = path or _BANKROLL_PATH
+    try:
+        with open(bp) as f:
+            data = json.load(f)
+        balance = float(data["balance_usdc"])
+        return {"balance_usdc": balance, "updated": data.get("updated", "")}
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, ValueError):
+        return {"balance_usdc": _DEFAULT_BANKROLL, "updated": datetime.now(timezone.utc).isoformat()}

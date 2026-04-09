@@ -151,7 +151,7 @@ def main():
         print("\n✓ Setup complete! You can now run the trading agent.")
         print("\nNext steps:")
         print("1. Fund your wallet with MATIC + USDC on Polygon")
-        print("2. Set OPENAI_API_KEY in .env")
+        print("2. Set ALPHA_VANTAGE_API_KEY in .env (for market intelligence)")
         print("3. Run: python main.py")
     else:
         print("\n✗ Setup failed. Check your private key and network connection.")

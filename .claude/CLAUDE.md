@@ -1,335 +1,156 @@
-# Polymarket Autonomous Trading Agent
+# Polymarket Autonomous Trader
 
+<!-- OPERATOR-SET: Do not modify this section -->
 Paper trading is the default mode. NEVER switch to live trading without explicit user request.
 
 ## Quick Reference
-
 - **Venv:** `source .venv/bin/activate` (required before any Python command)
-- **Tools dir:** `tools/` — CLI scripts for market discovery, pricing, trading, portfolio
-- **State dir:** `state/` — `strategy.md`, `core-principles.md`, `cycles/`, `reports/`
-- **Config:** `config.py` loads from `.env` via python-dotenv
+- **Tools dir:** `tools/` -- CLI scripts for market discovery, pricing, trading, portfolio
+- **State dir:** `state/` -- `strategy.md`, `core-principles.md`, `cycles/`, `reports/`
+- **Skills dir:** `.claude/skills/` -- 6 skill reference docs loaded on demand
+- **Config:** `lib/config.py` loads from `.env` via python-dotenv
 - **DB:** `trading.db` (SQLite, auto-created)
-- **Sub-agents:** `.claude/agents/` — scanner, analyst, risk-manager, planner, reviewer, strategy-updater, position-monitor, outcome-analyzer
-- **Detailed docs:** Root `CLAUDE.md` has architecture, file map, config params, key decisions, API details
 
 ---
 
-## Trading Cycle Orchestration
+## Session Start
 
-When the user says "run a trading cycle" (or similar), execute this pipeline:
+Every trading session begins with:
 
-### Step 0: Initialization
-
-1. Generate a cycle ID using current UTC timestamp: `YYYYMMDD-HHMMSS` format (e.g., `20260327-143000`).
-
-2. Create directories:
-   ```
-   Bash: mkdir -p state/cycles/{cycle_id} state/reports
-   ```
-
-3. Read context files:
-   - `state/strategy.md` — evolving trading strategy (may be minimal on first cycles)
-   - `state/core-principles.md` — immutable human-set principles (read-only, never modify)
-   - 3 most recent `state/reports/cycle-*.md` files (sorted descending by name). If none exist, note this is the inaugural cycle.
-
+1. Generate cycle ID: `YYYYMMDD-HHMMSS` format using current UTC time
+2. Create directories: `mkdir -p state/cycles/{cycle_id} state/reports`
+3. Read these files for context:
+   - `state/strategy.md` -- your evolving trading strategy
+   - `state/core-principles.md` -- immutable guardrails (NEVER modify)
+   - 3 most recent `state/reports/cycle-*.md` files (sorted descending)
+   - `knowledge/golden-rules.md` -- accumulated trading wisdom (when it exists)
 4. Log: "Starting trading cycle {cycle_id}"
 
-5. **Extract core-principles constraints for sub-agents.** After reading `state/core-principles.md`, identify the constraints that are relevant to each downstream sub-agent (e.g., market focus categories for the scanner, position size caps for the risk manager, allowed trade types for the planner). When spawning any sub-agent in Steps 0.5 through 7, include the relevant core-principles constraints verbatim in that agent's prompt so it can respect operator rules. You decide what's relevant per agent — do not dump the entire file, just the applicable constraints.
+If this is the first-ever cycle (no prior reports exist), note it as the inaugural cycle.
+The strategy file may be minimal -- that is expected. It will evolve through Phase E
+after positions start resolving.
 
-### Step 0.5: Position Monitor
+If `knowledge/calibration.json` exists, load it for pre-analysis calibration corrections
+in Phase C. If it does not exist yet, Phase E will create it after the first resolutions.
 
-**Non-blocking** — if this step fails, log a warning and continue to Step 1.
+---
 
-Spawn the Position Monitor sub-agent:
+## Trading Cycle
 
-```
-Task(
-  subagent_type="position-monitor",
-  description="Monitor open positions",
-  prompt="Review all open positions for trading cycle {cycle_id}. Check current prices, resolution status, and thesis validity. Write your output to state/cycles/{cycle_id}/position_monitor.json"
-)
-```
+### Phase A: Check Positions
+<!-- OPERATOR-SET -->
+Review all open positions for sell signals, resolved markets, and thesis changes.
 
-After completion:
-- Read `state/cycles/{cycle_id}/position_monitor.json`
-- Validate: `cycle_id`, `timestamp`, `positions_reviewed` (int), `recommendations` (array with `market_id`, `action`, `sell_size`, `reasoning`, `urgency`)
-- If invalid or missing: log warning, continue to Step 1
-- Log: "Position monitor reviewed {N} positions: {sell_count} SELL, {watch_count} WATCH, {hold_count} HOLD"
+1. Run: `python tools/get_portfolio.py --include-risk --pretty`
+2. Run: `python tools/check_resolved.py --pretty`
+3. For resolved markets: load `.claude/skills/resolution-parser.md` and follow its framework
+4. For positions needing sell evaluation: assess current thesis vs entry thesis
+5. Execute sells via `python tools/sell_position.py` for positions with invalidated thesis or hit stop-loss
 
-### Step 0.75: Execute Sells + Outcome Analysis
+### Phase B: Find Opportunities
+<!-- OPERATOR-SET -->
+Discover and filter tradeable markets from Polymarket.
 
-**Non-blocking** — if this step fails, log a warning and continue to Step 1.
+1. Run: `python tools/discover_markets.py --limit 50 --pretty`
+2. Apply resolution filter: exclude markets resolving beyond 14 days (MAX_RESOLUTION_DAYS in config)
+3. Apply sweet-spot filter: YES price between 0.10-0.85
+4. Remove markets where we already hold positions (from Phase A portfolio)
+5. Rank by volume_24h descending, take top 5-8 candidates
+6. If fewer than 3 pass, relax price range to 0.05-0.95
 
-**Execute sells** directly (no sub-agent) for each recommendation where `action == "SELL"`:
+### Phase C: Analyze Markets
+<!-- OPERATOR-SET -->
+Deep-dive each candidate market with web research and probability estimation.
 
-```bash
-cd /Users/aleksandrrazin/work/polymarket-agent && source .venv/bin/activate && python tools/sell_position.py \
-  --market-id "{rec.market_id}" \
-  --token-id "{rec.token_id}" \
-  --side {rec.side} \
-  --size {rec.sell_size} \
-  --question "{rec.question}" \
-  --reasoning "{rec.reasoning}" \
-  --category "{rec.category}" \
-  --pretty
-```
+1. Load `.claude/skills/evaluate-edge.md` and follow its framework for each candidate
+2. Load `.claude/skills/calibration-check.md` to check for known biases in this category
+3. For each market: search the web for Bull and Bear evidence, synthesize probability, calculate edge
+4. Skip markets with |edge| < MIN_EDGE_THRESHOLD or confidence < 0.3
+5. Record analysis to `state/cycles/{cycle_id}/analysis_{market_id}.json`
 
-After all sells, write `state/cycles/{cycle_id}/sell_results.json`:
-```json
-{
-  "cycle_id": "{cycle_id}",
-  "timestamp": "<ISO 8601 UTC>",
-  "sells_attempted": 0,
-  "sells_succeeded": 0,
-  "sells_failed": 0,
-  "results": []
-}
-```
+### Phase D: Size and Execute
+<!-- OPERATOR-SET -->
+Size positions and execute trades for markets with sufficient edge.
 
-Log: "Executed {N}/{M} sells successfully"
+1. Load `.claude/skills/size-position.md` and follow its framework for each trade candidate
+2. Check portfolio capacity: remaining exposure vs 30% bankroll limit
+3. Calculate Kelly-adjusted, confidence-weighted position sizes
+4. Cap each position at 5% of bankroll (core principle)
+5. Execute via: `python tools/execute_trade.py --market-id {id} --token-id {token} --side {side} --size {size} --price {price} --estimated-prob {prob} --edge {edge} --reasoning "{reason}" --category "{cat}" --pretty`
+6. Record results to `state/cycles/{cycle_id}/execution_results.json`
 
-**Then spawn the Outcome Analyzer sub-agent:**
+### Phase E: Learn and Evolve
+<!-- OPERATOR-SET -->
+Analyze outcomes, update calibration, write cycle report, evolve strategy.
 
-```
-Task(
-  subagent_type="outcome-analyzer",
-  description="Analyze closed position outcomes",
-  prompt="Analyze outcomes for all closed positions in trading cycle {cycle_id}. Calculate Brier scores, calibration metrics, and P&L by category. Write your output to state/cycles/{cycle_id}/outcome_analysis.json"
-)
-```
+1. Load `.claude/skills/post-mortem.md` for any resolved positions from Phase A
+2. Load `.claude/skills/calibration-check.md` to record outcomes and update calibration data
+   - For each resolved position, run: `python tools/record_outcome.py --market-id {id} --stated-prob {prob} --actual {WIN|LOSS} --category {cat} --pnl {pnl} --pretty`
+   - Then interpret results using the calibration-check framework
+3. Load `.claude/skills/cycle-review.md` to write the cycle report and update strategy
+4. Write cycle report to `state/reports/cycle-{cycle_id}.md`
+5. Update `state/strategy.md` with max 0-3 evidence-backed changes
+6. If any post-mortem yielded a golden-rule candidate (loss > 2% bankroll OR 2+ repeated patterns): add to `knowledge/golden-rules.md` following its format. Max 3 new rules per cycle.
+7. For each category traded this cycle: append a dated "Lessons Learned" entry to `knowledge/market-types/{category}.md` with observation and evidence
+8. Log cycle summary: markets scanned, analyzed, traded, P&L impact
 
-After completion:
-- Read and validate `outcome_analysis.json` (must have `cycle_id`, `positions_analyzed`, `analyses` array, `calibration`, `summary`)
-- If invalid: log warning, continue to Step 1
-- Log: "Outcome analysis: {N} positions analyzed, avg Brier score: {score}"
+---
 
-### Step 1: Scanner
+## Guardrails
+<!-- OPERATOR-SET: Do not modify this section -->
 
-Spawn the Scanner sub-agent:
+### Safety
+- Paper trading default -- never enable live without explicit user instruction
+- Maximum 5% of bankroll on any single position
+- Maximum 30% of bankroll in total open exposure
+- Record every trade in database BEFORE confirming execution
+- 5 consecutive losses -> 24-hour trading pause
 
-```
-Task(
-  subagent_type="scanner",
-  description="Scan Polymarket markets",
-  prompt="Discover active Polymarket markets for trading cycle {cycle_id}. Use --limit 20 to scan at least 20 markets. Write your output to state/cycles/{cycle_id}/scanner_output.json"
-)
-```
+### File Discipline
+- NEVER modify: `.env`, `trading.db` (directly), `lib/config.py`, `state/core-principles.md`
+- Cycle outputs go to `state/cycles/{cycle_id}/`
+- Cycle reports go to `state/reports/cycle-{cycle_id}.md`
+- All intermediate files kept for audit trail
 
-After completion:
-- Read `state/cycles/{cycle_id}/scanner_output.json`
-- Validate: `cycle_id`, `timestamp`, `markets_found` (number), `markets` (array)
-- If missing/invalid/zero markets: log error, skip to Step 6 (Reviewer)
-- Log: "Scanner found {N} candidate markets"
+### Self-Modification Rules
+- Skill docs (`.claude/skills/*.md`): You MAY add examples, refine criteria, annotate decisions within `<!-- CLAUDE-EDITABLE -->` sections
+- Strategy (`state/strategy.md`): You MAY update with evidence-backed changes (max 3 per cycle)
+- CLAUDE.md: You MAY update `<!-- CLAUDE-EDITABLE -->` sections below with process improvements
+- You MUST NOT modify `<!-- OPERATOR-SET -->` sections
 
-### Step 1b: Sweet-Spot Filtering
+---
 
-**You do this directly — no sub-agent.**
+## Process Notes
+<!-- CLAUDE-EDITABLE: Claude may update this section based on trading experience -->
 
-Filter the scanner's market list before sending to analysts:
-
-1. **Price sweet spot:** Keep only markets where `yes_price` is between 0.15 and 0.85
-2. **Existing positions:** Run `source .venv/bin/activate && python tools/get_portfolio.py --pretty` to check current portfolio. Skip markets where we already hold a position.
-3. **WATCH markets:** If Step 0.5 produced position_monitor.json, also skip markets flagged as WATCH (weakening thesis — avoid doubling down).
-4. **Rank** by `volume_24h` descending, take top 5-8 markets
-
-If fewer than 3 pass, relax price range to 0.10-0.90 and retry.
-
-Log: "Filtered {N} markets to {M} sweet-spot candidates for analysis"
-
-### Step 2: Analysts (SEQUENTIAL — one at a time)
-
-For each market in the filtered list, spawn an Analyst sub-agent **one at a time**:
-
-```
-Task(
-  subagent_type="analyst",
-  description="Analyze market {market.id}",
-  prompt="Analyze this Polymarket market for trading cycle {cycle_id}:
-Market ID: {market.id}
-Question: {market.question}
-Current YES price: {market.yes_price}
-Current NO price: {market.no_price}
-Category: {market.category}
-End date: {market.end_date}
-Volume 24h: {market.volume_24h}
-Liquidity: {market.liquidity}
-Write your output to state/cycles/{cycle_id}/analyst_{market.id}.json"
-)
-```
-
-**IMPORTANT: Run analysts SEQUENTIALLY.** Spawn one, wait for completion, verify output file, then spawn the next. Do NOT spawn in parallel or in background — this causes session failures.
-
-After all complete:
-- Read and validate each `analyst_{market_id}.json` (must have `synthesis.estimated_probability`, `synthesis.confidence`, `synthesis.edge`, `synthesis.recommended_side`)
-- Skip malformed outputs, continue with valid ones
-- If zero valid: log warning, skip to Step 6
-- Log: "Analyzed {N} markets successfully, {M} failed"
-
-### Step 3: Risk Manager
-
-```
-Task(
-  subagent_type="risk-manager",
-  description="Evaluate risk for cycle",
-  prompt="Evaluate risk and size positions for trading cycle {cycle_id}.
-Read analyst outputs from: state/cycles/{cycle_id}/analyst_*.json
-Valid analyst files: {list filenames}
-Write your output to state/cycles/{cycle_id}/risk_output.json"
-)
-```
-
-After completion:
-- Read and validate `risk_output.json` (must have `portfolio_state`, `evaluated_markets` array, `rejected_markets` array)
-- If invalid: log error, skip to Step 6
-- Log: "Risk Manager approved {N} trades, rejected {M}"
-
-### Step 4: Planner
-
-```
-Task(
-  subagent_type="planner",
-  description="Create trade plan",
-  prompt="Create a trade plan for cycle {cycle_id}.
-Read strategy from: state/strategy.md
-Read scanner output from: state/cycles/{cycle_id}/scanner_output.json
-Read analyst outputs from: state/cycles/{cycle_id}/analyst_*.json
-Read risk assessment from: state/cycles/{cycle_id}/risk_output.json
-Write your trade plan to state/cycles/{cycle_id}/trade_plan.json"
-)
-```
-
-After completion:
-- Read and validate `trade_plan.json` (must have `trades` array with `market_id`, `action`, `side`, `token_id`, `size`, `price`)
-- If invalid: log error, skip to Step 6
-- Log: "Trade plan has {N} trades to execute"
-
-### Step 5: Execute Trades
-
-**You execute trades directly — no sub-agent.**
-
-For each trade in `trade_plan.trades`, run:
-
-```bash
-cd /Users/aleksandrrazin/work/polymarket-agent && source .venv/bin/activate && python tools/execute_trade.py \
-  --market-id "{trade.market_id}" \
-  --token-id "{trade.token_id}" \
-  --side {trade.side} \
-  --size {trade.size} \
-  --price {trade.price} \
-  --question "{trade.question}" \
-  --estimated-prob {trade.estimated_prob} \
-  --edge {trade.edge} \
-  --reasoning "{trade.reasoning}" \
-  {--neg-risk if trade.neg_risk is true} \
-  --category "{trade.category}" \
-  --pretty
-```
-
-If a trade fails: log error, record as failed, continue with next trade.
-
-After all trades, write `state/cycles/{cycle_id}/execution_results.json`:
-```json
-{
-  "cycle_id": "{cycle_id}",
-  "timestamp": "<ISO 8601 UTC>",
-  "trades_attempted": 0,
-  "trades_succeeded": 0,
-  "trades_failed": 0,
-  "results": []
-}
-```
-
-Log: "Executed {N}/{M} trades successfully"
-
-### Step 6: Reviewer
-
-```
-Task(
-  subagent_type="reviewer",
-  description="Review trading cycle",
-  prompt="Review trading cycle {cycle_id}.
-Read all cycle data from: state/cycles/{cycle_id}/
-Files available: position_monitor.json, sell_results.json, outcome_analysis.json, scanner_output.json, analyst_*.json, risk_output.json, trade_plan.json, execution_results.json
-Write your review to: state/cycles/{cycle_id}/reviewer_output.json
-Write the cycle report to: state/reports/cycle-{cycle_id}.md"
-)
-```
-
-After completion:
-- Read and validate `reviewer_output.json` (must have `summary`, `learnings` array, `strategy_suggestions` array)
-- Verify `state/reports/cycle-{cycle_id}.md` exists
-- Log: "Cycle report written to state/reports/cycle-{cycle_id}.md"
-
-### Step 7: Strategy Updater
-
-```
-Task(
-  subagent_type="strategy-updater",
-  description="Update trading strategy",
-  prompt="Update the trading strategy based on cycle {cycle_id} review.
-Read reviewer output from: state/cycles/{cycle_id}/reviewer_output.json
-Read outcome analysis from: state/cycles/{cycle_id}/outcome_analysis.json
-Read current strategy from: state/strategy.md
-Write your update output to: state/cycles/{cycle_id}/strategy_update.json"
-)
-```
-
-After completion:
-- Read and validate `strategy_update.json` (must have `changes_applied`, `changes` array, `summary`)
-- If fails: log error but do NOT fail the cycle — strategy update is post-cycle enhancement
-- Log: "Strategy updated: {changes_applied} changes applied"
-
-### Step 8: Completion
-
-Log a summary:
-```
-Cycle {cycle_id} complete:
-  Positions monitored: {N}
-  Positions sold: {N}
-  Outcome analyses: {N}
-  Markets scanned: {N}
-  Markets analyzed: {N}
-  Trades executed: {N}
-  Capital deployed: ${N} USDC
-  Strategy changes: {N}
-```
+_No process notes yet. Claude will add observations about what works and what to improve as trading cycles accumulate._
 
 ---
 
 ## Error Handling
+<!-- OPERATOR-SET -->
 
 | Failure | Action |
-|---|---|
-| Position Monitor fails | Log warning, continue to Step 1 (non-blocking) |
-| Sell execution fails | Log error per sell, continue with remaining sells |
-| Outcome Analyzer fails | Log warning, continue to Step 1 (non-blocking) |
-| Scanner fails | STOP cycle, skip to Step 6 (Reviewer) |
-| All analysts fail | Skip to Step 6 |
-| Risk Manager fails | Skip to Step 6 |
-| Planner fails | Skip to Step 6 |
-| Single trade fails | Continue with remaining trades |
-| Reviewer fails | Log error, cycle still complete |
-| Strategy Updater fails | Log error, cycle still complete |
+|---------|--------|
+| Portfolio check fails | Log warning, continue to Phase B |
+| Market discovery fails | STOP cycle, skip to Phase E (write report) |
+| Single market analysis fails | Skip that market, continue with others |
+| Trade execution fails | Log error per trade, continue with remaining |
+| Strategy update fails | Log error, cycle still complete |
 
-Always run the Reviewer even if earlier stages failed — every cycle produces a report.
+Always complete Phase E (write cycle report) even if earlier phases failed.
 
 ---
 
-## Critical Rules
+<!-- GSD:workflow-start source:GSD defaults -->
+## GSD Workflow Enforcement
 
-### Sub-Agent Spawning
-- **ALWAYS** use the `Task` tool with `subagent_type` to spawn sub-agents
-- **NEVER** use `Bash("claude ...")` or `Bash("claude --agent ...")` to spawn sub-agents — this causes nested session failures
-- Run analysts **sequentially** (one Task call at a time, wait for completion)
-- Other sub-agents (scanner, risk-manager, planner, reviewer, strategy-updater) are each spawned once
+Before using Edit, Write, or other file-changing tools, start work through a GSD command so planning artifacts and execution context stay in sync.
 
-### Safety
-- **NEVER** modify `.env`, `trading.db`, or `config.py`
-- **NEVER** modify `state/core-principles.md` — human-operated only
-- **NEVER** set `PAPER_TRADING=false` or use `--live` without explicit user instruction
-- `state/strategy.md` is modified ONLY by the Strategy Updater sub-agent (Step 7)
+Use these entry points:
+- `/gsd:quick` for small fixes, doc updates, and ad-hoc tasks
+- `/gsd:debug` for investigation and bug fixing
+- `/gsd:execute-phase` for planned phase work
 
-### File Discipline
-- Cycle outputs go to `state/cycles/{cycle_id}/`
-- Cycle reports go to `state/reports/cycle-{cycle_id}.md`
-- Keep all intermediate JSON files for audit trail
+Do not make direct repo edits outside a GSD workflow unless the user explicitly asks to bypass it.
+<!-- GSD:workflow-end -->

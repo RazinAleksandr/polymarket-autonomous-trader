@@ -1,0 +1,58 @@
+{
+  "schema_version": "1.0",
+  "description": "Calibration tracking - populated by Claude after each trade resolution",
+  "last_updated": "2026-04-09T11:35:52.793225+00:00",
+  "summary": {
+    "total_trades": 3,
+    "overall_brier": 0.3473,
+    "overall_error_pp": 15.666666666666666
+  },
+  "categories": {
+    "crypto": {
+      "trades": 1,
+      "brier": 0.12249999999999998,
+      "error_pp": -35.0,
+      "win_rate": 1.0,
+      "total_pnl": 0.0
+    },
+    "politics": {
+      "trades": 2,
+      "brier": 0.4597,
+      "error_pp": 41.0,
+      "win_rate": 0.5,
+      "total_pnl": -279.60999999999996
+    },
+    "sports": {
+      "trades": 0,
+      "brier": null,
+      "error_pp": null,
+      "win_rate": null,
+      "total_pnl": 0.0
+    },
+    "commodities": {
+      "trades": 0,
+      "brier": null,
+      "error_pp": null,
+      "win_rate": null,
+      "total_pnl": 0.0
+    },
+    "entertainment": {
+      "trades": 0,
+      "brier": null,
+      "error_pp": null,
+      "win_rate": null,
+      "total_pnl": 0.0
+    },
+    "finance": {
+      "trades": 0,
+      "brier": null,
+      "error_pp": null,
+      "win_rate": null,
+      "total_pnl": 0.0
+    }
+  },
+  "corrections": {
+    "description": "Category-level calibration corrections. Populated when error_pp exceeds threshold.",
+    "active": []
+  }
+}

@@ -9,7 +9,7 @@ import sys
 # Ensure project root is on Python path so `lib` package is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.config import load_config
+from lib.config import load_config, load_bankroll
 from lib.db import DataStore
 from lib.errors import error_exit, EXIT_API_ERROR
 from lib.logging_setup import get_logger
@@ -38,19 +38,23 @@ def main():
     register_shutdown_handler()
     log = get_logger("get_portfolio", config)
 
+    bankroll = load_bankroll()["balance_usdc"]
+    max_exposure_usdc = config.max_exposure_pct * bankroll
+    max_position_usdc = config.max_position_pct * bankroll
+
     store = DataStore(db_path=config.db_path)
     try:
         result = get_portfolio_summary(
             store=store,
             gamma_api_url=config.gamma_api_url,
-            max_total_exposure_usdc=config.max_total_exposure_usdc,
+            max_total_exposure_usdc=max_exposure_usdc,
         )
 
         if args.include_risk:
             risk = check_risk_limits(
                 store,
-                config.max_total_exposure_usdc,
-                config.max_position_size_usdc,
+                max_exposure_usdc,
+                max_position_usdc,
             )
             result["risk"] = risk
 

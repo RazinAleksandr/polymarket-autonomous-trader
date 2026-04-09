@@ -12,7 +12,7 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - **Tech stack**: Python 3.12 for instrument layer, Claude Code CLI for agent layer
 - **Agent runtime**: Claude Code sessions spawning sub-agents via Task tool, calling Python via Bash
 - **Trading API**: Polymarket CLOB via py-clob-client
-- **Analysis**: Claude sub-agents (not OpenAI) for market analysis
+- **Analysis**: Claude (via Claude Code CLI session) for market analysis
 - **Persistence**: SQLite for trade data, markdown files for strategy/reports
 - **Safety**: Paper trading default. Never live without explicit user configuration.
 - **Existing code**: Review and cherry-pick, but don't inherit the old architecture
@@ -31,14 +31,11 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 ## Frameworks
 - `py-clob-client` (>=0.17.0) - Polymarket CLOB API client; handles order placement, position management, market data; core integration for live trading
 - `web3` (>=7.0.0) - Ethereum/Polygon wallet interaction, token approvals, RPC connectivity for L2 operations
-- `anthropic` (>=0.49.0) - AI integration (mentioned in requirements, may be deprecated in favor of OpenAI)
-- `openai` (via OpenAI SDK, configured in code) - GPT-4o API for market probability estimation via Responses API with web search tool
 - `requests` (>=2.31.0) - Gamma API HTTP client for market discovery and metadata
 - `python-dotenv` (>=1.0.0) - Environment variable loading from `.env` files
 - `eth-account` (>=0.13.0) - Ethereum wallet generation, account management, transaction signing for Polygon mainnet
 ## Key Dependencies
 - `py-clob-client` (>=0.17.0) - Core trading execution; derives L2 API credentials, creates signed orders, posts to CLOB API
-- `openai` - Market analysis engine; uses GPT-4o Responses API with `web_search` tool for real-time data
 - `web3` (>=7.0.0) - Token approvals and on-chain operations for live trading (USDC approve, CTF setApprovalForAll)
 - `requests` (>=2.31.0) - Gamma API HTTP requests for market discovery and event fetching
 - `eth-account` (>=0.13.0) - Wallet generation and signing for EOA transactions
@@ -56,7 +53,7 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - Internet connectivity for:
 - Python 3.12.9 runtime
 - Polygon mainnet chain ID: 137
-- OPENAI_API_KEY required for market analysis
+- ALPHA_VANTAGE_API_KEY for market intelligence (optional)
 - PRIVATE_KEY required for live trading (optional for paper trading)
 - SQLite3 (embedded in Python stdlib)
 - Network access to all external APIs (see INTEGRATIONS.md)
@@ -74,7 +71,7 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - Descriptive verb-noun pattern: `record_trade()`, `upsert_position()`, `check_risk_limits()`
 - Snake case throughout: `cycle_start`, `remaining_capital`, `estimated_prob`, `kelly_adjusted`
 - Boolean flags: `paper_mode`, `is_paper`, `shutdown_requested`
-- Constants in UPPERCASE: `PRIVATE_KEY`, `OPENAI_API_KEY`, `MAX_POSITION_SIZE_USDC` (in `config.py`)
+- Constants in UPPERCASE: `PRIVATE_KEY`, `ALPHA_VANTAGE_API_KEY`, `MAX_POSITION_PCT` (in `config.py`)
 - Loop variables: `m` for market, `t` for trade, `pos` for position, `c` for closed position (single letter for short-lived iterations)
 - Dataclasses for data models: `@dataclass` used in `TradeSignal`, `Market`, `MarketAnalysis`, `OrderResult`
 - Type hints on function parameters and returns: `def kelly_criterion(prob: float, odds_price: float, fraction: float = config.KELLY_FRACTION) -> float`
@@ -91,7 +88,7 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - Type hints used throughout but not enforced by mypy or similar
 ## Error Handling
 - `fetch_active_markets()` in `market_discovery.py`: returns empty list on error
-- `analyze_market()` in `market_analyzer.py`: returns None on JSON decode or OpenAI error
+- `analyze_market()` in `market_analyzer.py`: returns None on JSON decode or analysis error
 - `batch_analyze()`: catches individual failures but continues processing
 - `_init_live_client()` in `trader.py`: catches and logs, falls back to paper mode
 ## Logging
@@ -108,7 +105,7 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - Example from `strategy.py`:
 ## Function Design
 - Positional for required params: `def kelly_criterion(prob: float, odds_price: float, ...)`
-- Keyword-only config defaults: functions use `config.KELLY_FRACTION`, `config.MAX_POSITION_SIZE_USDC`
+- Keyword-only config defaults: functions use `config.KELLY_FRACTION`, `config.MAX_POSITION_PCT`
 - Dataclass parameters preferred over many positional args
 - Single return type per function
 - Dataclasses for multi-field returns: `TradeSignal`, `OrderResult`, `MarketAnalysis`
@@ -154,13 +151,12 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - Depends on: `requests`, `config.py`, `logger_setup.py`
 - Used by: `main.py` (market fetching), `trader.py` (market refresh), `portfolio.py` (price/resolution updates)
 - Key functions: `fetch_active_markets()` (discovery), `fetch_market_by_id()` (single lookup)
-- Purpose: Generate probability estimates using OpenAI GPT-4o with web search for informed decisions
+- Purpose: Generate probability estimates using Claude (via Claude Code CLI) with web search for informed decisions
 - Location: `market_analyzer.py`
-- Contains: `MarketAnalysis` dataclass, OpenAI client (lazy singleton), prompt template, JSON response parsing, parallel analysis coordinator
-- Depends on: `openai`, `config.py`, `logger_setup.py`, `concurrent.futures`
+- Contains: `MarketAnalysis` dataclass, prompt template, JSON response parsing, parallel analysis coordinator
+- Depends on: `config.py`, `logger_setup.py`, `concurrent.futures`
 - Used by: `main.py` (analysis step)
 - Key functions: `analyze_market()` (single), `batch_analyze()` (parallel with ThreadPoolExecutor, max_workers=4)
-- Key abstractions: OpenAI Responses API with optional `web_search` tool based on `ENABLE_WEB_SEARCH` config
 - Purpose: Convert market analyses into trade signals with Kelly criterion sizing and edge filtering
 - Location: `strategy.py`
 - Contains: `TradeSignal` dataclass, Kelly criterion formula, signal evaluation logic, position conflicts check
@@ -202,7 +198,7 @@ A two-layer autonomous trading system for Polymarket prediction markets. The **i
 - Purpose: Represents a single prediction market with pricing and metadata
 - Examples: `market_discovery.Market` dataclass with 11 fields (id, question, tokens, prices, volume, liquidity, dates)
 - Pattern: Immutable data container; created by API parsing in `_parse_market()`, passed through analysis → strategy → execution pipeline
-- Purpose: Output of GPT-4o analysis with probability estimate and confidence
+- Purpose: Output of Claude analysis with probability estimate and confidence
 - Examples: `market_analyzer.MarketAnalysis` dataclass with 10 fields (market data + estimated_prob, confidence, edge, reasoning, sources)
 - Pattern: Enriches market with analysis; edge = estimated_prob - market_price; used by strategy to generate signals
 - Purpose: Intent to execute a trade with sizing and justification

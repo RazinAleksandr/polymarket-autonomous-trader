@@ -2,44 +2,40 @@
 
 This document is updated by the trading agent after each cycle.
 It starts blank and evolves based on trading experience.
+Claude builds all rules here through autonomous trading -- no pre-seeded content.
 
 ## Market Selection Rules
-<!-- Last updated: cycle 20260331-200654 -->
 
-1. Pre-filter scanned markets by resolution date: only pass markets resolving within 72h to analysts. Markets with end_date beyond the session hard limit waste analyst bandwidth. (Added cycle 20260328-080810)
-2. Run at least 5 scanner passes with diverse sort criteria to maximize candidate yield: (a) volume-sorted general pass, (b) end-date proximity pass for markets resolving within 48h, (c) category-specific passes for politics, finance, and crypto, (d) newly-listed markets pass. Use --limit 40+ per pass and deduplicate results. Target: 60+ unique markets before filtering. Three consecutive cycles of sub-15 raw markets confirmed that 3 passes are insufficient. (Refined cycle 20260330-133146, originally added cycle 20260328-080810)
-4. For markets resolving within 72 hours, relax the sweet-spot price floor from 0.15 to 0.10. Short-duration markets at extreme prices can still offer edge when the outcome is near-certain, and the tight default filter excludes valid opportunities in a low-yield scanner environment. (Added cycle 20260330-090410)
-6. Adopt a multi-category approach rather than targeting a single category (e.g., crypto) per cycle. Three consecutive cycles found zero crypto markets, confirming that category-specific supply on Polymarket is unreliable. Each cycle should pursue the best edge opportunities across all categories -- crypto, politics, finance, commodities -- within the existing resolution window constraints. (Added cycle 20260330-133146)
-7. Exclude counting/behavioral markets (tweet counts, post counts, follower milestones, social media metrics) at the scanner filtering stage before they reach analysts. These markets have real-time public trackers that make them highly efficient with no exploitable informational edge. This strengthens the prior "prefer verifiable-event markets" guidance into a hard filter to save analyst bandwidth. (Refined cycle 20260330-193758, originally added cycle 20260330-185611)
-9. When filtering scanner results, deprioritize high-volume markets priced in the 0.40-0.60 range. These are consistently efficiently priced across multiple cycles and rarely offer exploitable edge. Instead, allocate analyst bandwidth toward lower-volume or lower-liquidity markets where pricing inefficiency is more likely, particularly those resolving within 24-72 hours. (Added cycle 20260330-193758)
-12. When the default scan limit returns fewer than 30 markets, automatically increase the scan limit to 120+ to find crypto and short-dated markets that may exist outside the top-volume list. This addresses the inaugural-cycle finding where only 23 of 60 requested markets were returned. **After 2 consecutive zero-trade cycles, use --limit 120+ unconditionally per core-principles rule 8.** (Added cycle 20260331-200731, reinforced cycle 20260331-200654)
-13. Explicitly request "ending soon" sort order and crypto/token-launch category filters in addition to the default volume-based sorting. Volume sorting over-represents efficiently-priced sports matchups and under-surfaces the short-dated crypto markets that are the primary trading focus. (Added cycle 20260331-200731)
-14. Apply the sub-48h resolution filter across ALL categories, not just crypto. Core-principles allow any market resolving within 48h as a secondary target regardless of category. This expands the opportunity set when crypto-specific markets are unavailable. (Added cycle 20260331-200731)
-15. Add dedicated crypto-keyword search passes to the scanner: query the Gamma API separately for markets containing "BTC", "ETH", "SOL", "crypto", "token", and "DeFi" keywords. The generic volume-sorted scan consistently misses niche crypto markets because they have lower volume than mainstream sports/politics markets. Deduplicate against the main scan results. (Added cycle 20260331-200654)
-16. Pre-filter expired markets at the scanner level before passing to the filtering step. In cycle 20260331-200654, 9 of 60 scanned markets (15%) were already past their end_date at scan time, wasting scan slots. The scanner should compare each market's end_date against the current UTC time and discard any market where end_date < now. (Added cycle 20260331-200654)
-17. **Structural market availability note for operator awareness:** As of 2026-04-01, Polymarket's market inventory is heavily weighted toward long-dated geopolitical, political, and sports futures. Short-duration markets (resolving within 72h) are scarce outside of daily sports matchups (which are banned per core principles). Zero crypto markets with ≤72h resolution were found across 3 consecutive cycles. The 72h hard limit is the binding constraint -- 93% of scanned markets in cycle 20260401-120009 were rejected solely on resolution window. Additionally, the Gamma API returns far fewer markets than requested (15 returned vs 120 requested), suggesting the discover_markets.py tool may need pagination or alternative query parameters. The agent will continue scanning aggressively, but the operator should be aware that zero-trade cycles will continue until Polymarket's market mix shifts or the resolution window constraint is revisited. (Updated cycle 20260401-120009, originally added cycle 20260331-200654)
-18. **Scanner API limitation:** The discover_markets.py tool returned only 15 markets when 120 were requested across 3 cycles with different scan limits. The Gamma API may have a hard cap on results per query, or the tool may lack pagination support. Investigate whether the Gamma API supports offset/cursor-based pagination, category filtering, or tag-based queries to surface more of the market inventory. (Added cycle 20260401-120009)
+### Tennis Pricing Inefficiency (added cycle 7, 2026-04-04)
+**Evidence:** 4 data points across 4 cycles. Polymarket consistently overprices tennis favorites by 6-12pp vs vig-adjusted sportsbook odds. Examples: Paul/Tiafoe 6-10pp gap (cycles 4-6), Pegula/Jovic 12pp gap (cycle 7).
+**Rule:** When a tennis match has NOT yet started, compare Polymarket YES price to vig-adjusted sportsbook odds. If the gap exceeds 6pp, consider buying the underdog (NO side). Sports category caps apply (2% bankroll, 4pp min edge).
+
+### Scan Timing (added cycle 7, 2026-04-04)
+**Evidence:** 3 cycles of tennis matches starting before scan time (17:00+ UTC), rendering edges untradeable.
+**Rule:** Run market scans before 16:00 UTC to catch tennis and other time-sensitive individual sport markets before they begin.
 
 ## Analysis Approach
-<!-- Last updated: cycle 20260331-050008 -->
 
-5. For commodity threshold markets (e.g., "will X price hit $Y"), perform a pre-analyst spot-price check before queuing for full analysis. If the underlying has already crossed the threshold and the market resolves within 48h, flag it as high-priority for immediate analysis. This avoids wasting analyst bandwidth on threshold markets where the underlying is far from the strike. (Added cycle 20260330-090410)
-10. For same-day-resolving markets where the outcome requires a specific public event (criminal conviction, legislation passage, official data release, diplomatic meeting) and no evidence of that event exists, the analyst should assign NO probability above 0.90 rather than defaulting to moderate confidence levels. Calibration data from closed positions shows systematic underconfidence on these calls: the Trump-Xi NO trade estimated 0.60 but resolved at 0.98 (Brier 0.144), while trades with high-conviction estimates like Crude Oil (est. 0.92, actual 0.953) had near-perfect calibration (Brier 0.001). When fundamentals overwhelmingly support one side on a time-constrained event, moderate estimates leave edge on the table. (Added cycle 20260331-050008)
+### Deadline Exception to Status Quo Bias (added cycle 11, 2026-04-09)
+**Evidence:** Iran ceasefire loss -$300.77 (3% bankroll). Entered NO at 95% on April 5; Hormuz ultimatum deadline April 6; Pakistan brokered ceasefire April 7. Rule 11 (status quo bias) was over-applied because the deadline fundamentally changed negotiation dynamics.
+**Rule:** When a credible hard deadline with severe consequences exists within 7 days of the market resolution window, increase the base probability of change/resolution by 2-3x. Deadlines create negotiation pressure that overrides normal status quo inertia. Do NOT apply Rule 11 at full weight when a deadline is imminent.
+
+### Geopolitical Probability Hard Caps (added cycle 11, 2026-04-09)
+**Evidence:** Same Iran ceasefire trade. Our politics knowledge base (Rule 3) says cap geopolitical probabilities at 90% / floor at 5%. We estimated 95% NO (5% YES), violating the cap. The cap exists because geopolitical events are inherently unpredictable.
+**Rule:** Hard-enforce 90/10 caps on all geopolitical probability estimates. If raw synthesis produces >90% for either side, automatically cap at 90% and recalculate edge. If edge disappears after capping, SKIP the trade. This is not optional — the cap is a pre-commitment against overconfidence.
+
+### Position Identity Verification (added cycle 7, 2026-04-04)
+**Evidence:** Cycles 4-6 misidentified position (market 1640919) as "Hungary PM Orban" when it was actually "US forces enter Iran by Apr 30" because the DB `question` field was empty.
+**Rule:** At cycle start, verify every open position's market identity via Gamma API. Never rely solely on the database `question` field. Cross-reference market_id to confirm the actual question and resolution criteria.
 
 ## Risk Parameters
-<!-- Last updated: cycle 20260330-185611 -->
-
-8. For markets resolving within 48 hours where the estimated edge exceeds 25%, consider using half-Kelly sizing instead of quarter-Kelly. The short resolution window limits downside exposure from thesis drift, and high-edge near-expiry opportunities are rare enough that capturing more value when they appear is warranted. This is a text suggestion for manual parameter consideration -- do not auto-apply to config. (Added cycle 20260330-185611)
-
-## Cycle Health Tracking
-<!-- Last updated: cycle 20260401-120009 -->
-
-- **Consecutive zero-trade cycles:** 3 (cycles 20260331-200731, 20260331-200654, 20260401-120009)
-- **Action threshold:** At 2+ consecutive zero-trade cycles, scanner must use --limit 120+ per core-principles rule 8 (active since cycle 20260331-200654)
-- **Escalation:** If zero-trade streak reaches 4, log operator alert recommending review of resolution window constraint or session timing. **Currently at 3 — next zero-trade cycle triggers escalation.**
 
 ## Trade Entry/Exit Rules
-<!-- Last updated: cycle 20260331-050008 -->
 
-3. Implement a near-threshold watchlist: when a market has gross edge above 8% but net edge between 4-8%, flag it for re-check in the next cycle. Price drift may create sufficient net edge on subsequent scans. (Added cycle 20260328-080810)
-11. Pre-execution slippage guard: before placing any order, fetch the current best_ask (for buys) or best_bid (for sells) and compare it to the planned price from the trade plan. If the actual price exceeds the planned price by more than 5%, reject the trade and log it as "slippage_rejected." This prevents executing at negative edge when market prices move between analysis and execution. Evidence: the Gas $4.00 YES trade in cycle 20260331-050008 filled at $0.81 vs planned $0.585 (39% slippage), turning a +13.5% edge into -9.4% negative edge. This rule would have correctly blocked that trade. (Added cycle 20260331-050008)
+## Cycle Health Tracking
+
+### Zero-Trade Streak
+- Cycles 4-7: 4 consecutive zero-trade cycles (excluding cycle 4's Iran trade)
+- Binding constraint: non-sports market availability within 14-day resolution window
+- Sports consistently show <4pp edge (7 cycles of evidence)
+- Tennis is the exception but matches expire before scan time

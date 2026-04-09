@@ -42,7 +42,7 @@ def fetch_active_markets(
                 "closed": "false",
                 "order": "volume24hr",
                 "ascending": "false",
-                "limit": 50,  # fetch more, filter locally
+                "limit": 200,  # fetch broad set, filter locally
             },
             timeout=30,
         )

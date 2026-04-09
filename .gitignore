@@ -36,10 +36,12 @@ taches-cc-resources/
 # Claude (settings, cache, worktrees, etc.)
 .claude/*
 # But allow agent definition files (sub-agent prompts are code)
-!.claude/agents/
 !.claude/CLAUDE.md
-!.claude/TOOLKIT-GUIDE.md
+!.claude/skills/
 
 # Agent cycle intermediate data (ephemeral)
 state/cycles/*/
 !state/cycles/.gitkeep
+
+# Generated runtime state
+state/signal.json

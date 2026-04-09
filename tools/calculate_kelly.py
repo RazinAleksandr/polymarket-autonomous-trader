@@ -9,7 +9,7 @@ import sys
 # Ensure project root is on the path so lib/ is importable
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from lib.config import load_config
+from lib.config import load_config, load_bankroll
 from lib.errors import EXIT_INVALID_ARG, error_exit
 from lib.strategy import calculate_edge, calculate_position_size
 
@@ -76,8 +76,13 @@ def main():
             EXIT_INVALID_ARG,
         )
 
-    # Use CLI bankroll or config default
-    bankroll = args.bankroll if args.bankroll is not None else config.max_total_exposure_usdc
+    # Use CLI bankroll or derive from config
+    if args.bankroll is not None:
+        bankroll = args.bankroll
+    else:
+        bankroll = config.max_exposure_pct * load_bankroll()["balance_usdc"]
+
+    max_position_usdc = config.max_position_pct * load_bankroll()["balance_usdc"]
 
     # Calculate position size
     position = calculate_position_size(
@@ -85,7 +90,7 @@ def main():
         price=args.market_price,
         bankroll=bankroll,
         kelly_fraction=config.kelly_fraction,
-        max_position_usdc=config.max_position_size_usdc,
+        max_position_usdc=max_position_usdc,
     )
 
     # Calculate edge

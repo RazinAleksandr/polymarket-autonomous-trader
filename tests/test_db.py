@@ -2,7 +2,7 @@ from lib.db import DataStore
 
 
 def test_tables_created(store):
-    """All 5 tables exist after DataStore init."""
+    """All 6 tables exist after DataStore init."""
     rows = store.conn.execute(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     ).fetchall()
@@ -10,7 +10,10 @@ def test_tables_created(store):
         r["name"] for r in rows
         if not r["name"].startswith("sqlite_")
     ])
-    expected = sorted(["trades", "positions", "decisions", "market_snapshots", "strategy_metrics"])
+    expected = sorted([
+        "trades", "positions", "decisions", "market_snapshots",
+        "strategy_metrics", "calibration_records",
+    ])
     assert table_names == expected
 
 

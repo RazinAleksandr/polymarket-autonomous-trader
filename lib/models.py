@@ -47,6 +47,21 @@ class TradeSignal:
 
 
 @dataclass
+class CalibrationRecord:
+    market_id: str
+    category: str
+    stated_prob: float
+    actual_outcome: int  # 1 for WIN, 0 for LOSS
+    brier_score: float
+    error_pp: float  # (stated_prob - actual) * 100, signed
+    pnl: float
+    recorded_at: str  # ISO timestamp
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+@dataclass
 class OrderResult:
     order_id: str
     success: bool

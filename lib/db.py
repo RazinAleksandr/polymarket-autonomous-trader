@@ -93,6 +93,19 @@ class DataStore:
                 sharpe_ratio REAL,
                 metadata TEXT
             );
+
+            CREATE TABLE IF NOT EXISTS calibration_records (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                market_id TEXT NOT NULL,
+                category TEXT NOT NULL,
+                stated_prob REAL NOT NULL,
+                actual_outcome INTEGER NOT NULL,
+                brier_score REAL NOT NULL,
+                error_pp REAL NOT NULL,
+                pnl REAL DEFAULT 0,
+                notes TEXT DEFAULT ''
+            );
         """)
         self.conn.commit()
 
