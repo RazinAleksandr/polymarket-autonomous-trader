@@ -1,11 +1,11 @@
 {
   "schema_version": "1.0",
   "description": "Calibration tracking - populated by Claude after each trade resolution",
-  "last_updated": "2026-04-09T11:35:52.793225+00:00",
+  "last_updated": "2026-04-11T06:01:28.775002+00:00",
   "summary": {
-    "total_trades": 3,
-    "overall_brier": 0.3473,
-    "overall_error_pp": 15.666666666666666
+    "total_trades": 4,
+    "overall_brier": 0.27047499999999997,
+    "overall_error_pp": 6.750000000000001
   },
   "categories": {
     "crypto": {
@@ -23,11 +23,11 @@
       "total_pnl": -279.60999999999996
     },
     "sports": {
-      "trades": 0,
-      "brier": null,
-      "error_pp": null,
-      "win_rate": null,
-      "total_pnl": 0.0
+      "trades": 1,
+      "brier": 0.03999999999999998,
+      "error_pp": -19.999999999999996,
+      "win_rate": 1.0,
+      "total_pnl": 130.55
     },
     "commodities": {
       "trades": 0,

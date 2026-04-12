@@ -6,6 +6,10 @@ Claude builds all rules here through autonomous trading -- no pre-seeded content
 
 ## Market Selection Rules
 
+### Sportsbook Line Freshness Verification (added cycle 21, refined cycle 22, 2026-04-11)
+**Evidence:** 3 data points across 3 cycles. Pistons vs Hornets (cycle 20): stale BetRivers line inflated apparent edge from 6.5pp to 0pp after DraftKings reconciliation -- correctly SKIPPED. Thunder vs Nuggets (cycle 21): 5 independent sources all confirmed -11.5 / +340/-440 -- correctly TRADED at 23.5pp edge. Atletico Madrid (cycle 22): "best odds" aggregator showed 23/17 (42.5%) but Bet365/Interwetten/Merkur consensus was 2.88-2.97 (~33%) matching Polymarket -- correctly SKIPPED.
+**Rule:** For all sports trades, verify sportsbook odds across 3+ independent sources before declaring edge. Use mid-market CONSENSUS from named books (Bet365, DraftKings, BetMGM, etc.), NOT "best odds" aggregator figures which cherry-pick outlier lines. If spread differs by >2 points (NBA) or >10pp on moneyline across books, the wider/staler line must be discarded. Use only the tightest current market for edge calculation.
+
 ### Tennis Pricing Inefficiency (added cycle 7, 2026-04-04)
 **Evidence:** 4 data points across 4 cycles. Polymarket consistently overprices tennis favorites by 6-12pp vs vig-adjusted sportsbook odds. Examples: Paul/Tiafoe 6-10pp gap (cycles 4-6), Pegula/Jovic 12pp gap (cycle 7).
 **Rule:** When a tennis match has NOT yet started, compare Polymarket YES price to vig-adjusted sportsbook odds. If the gap exceeds 6pp, consider buying the underdog (NO side). Sports category caps apply (2% bankroll, 4pp min edge).
@@ -24,6 +28,10 @@ Claude builds all rules here through autonomous trading -- no pre-seeded content
 **Evidence:** Same Iran ceasefire trade. Our politics knowledge base (Rule 3) says cap geopolitical probabilities at 90% / floor at 5%. We estimated 95% NO (5% YES), violating the cap. The cap exists because geopolitical events are inherently unpredictable.
 **Rule:** Hard-enforce 90/10 caps on all geopolitical probability estimates. If raw synthesis produces >90% for either side, automatically cap at 90% and recalculate edge. If edge disappears after capping, SKIP the trade. This is not optional — the cap is a pre-commitment against overconfidence.
 
+### Resolution Criteria Re-Read After Material Events (added cycle 25, 2026-04-11)
+**Evidence:** 1 data point. Iran conflict ends Apr 15 position (market 1567746): entered NO based on "14 days from ceasefire = April 21, can't complete by April 15." After ceasefire announced April 7-8, did not re-read resolution criteria across 5 cycles (20-24). Criteria actually say 14-day period only needs to BEGIN by April 15, not complete. Position went from -$28 to -$41 unrealized during this period. The thesis was fundamentally wrong but never caught because the criteria weren't re-checked.
+**Rule:** After ANY material event that changes the landscape of an open position (ceasefire, policy announcement, election result, deadline change), IMMEDIATELY re-read the full resolution criteria text. Do not rely on your memory of what the criteria say. Specifically check: (1) what exactly triggers YES vs NO, (2) timing language ("by", "before", "begins", "ends"), (3) whether the new event satisfies or could satisfy any resolution condition. If the criteria contradict your thesis, reassess the position immediately.
+
 ### Position Identity Verification (added cycle 7, 2026-04-04)
 **Evidence:** Cycles 4-6 misidentified position (market 1640919) as "Hungary PM Orban" when it was actually "US forces enter Iran by Apr 30" because the DB `question` field was empty.
 **Rule:** At cycle start, verify every open position's market identity via Gamma API. Never rely solely on the database `question` field. Cross-reference market_id to confirm the actual question and resolution criteria.
@@ -35,7 +43,9 @@ Claude builds all rules here through autonomous trading -- no pre-seeded content
 ## Cycle Health Tracking
 
 ### Zero-Trade Streak
-- Cycles 4-7: 4 consecutive zero-trade cycles (excluding cycle 4's Iran trade)
+- Cycles 4-20: 16 consecutive zero-trade cycles (excluding cycle 4's Iran trade)
 - Binding constraint: non-sports market availability within 14-day resolution window
-- Sports consistently show <4pp edge (7 cycles of evidence)
-- Tennis is the exception but matches expire before scan time
+- Sports typically show <4pp edge after sportsbook de-vig (20+ cycles of evidence)
+- **Exception: rest-day games.** Thunder vs Nuggets (cycle 21) showed 23.5pp edge when OKC rested all starters. Resolved WIN +$130.55 (cycle 23). This is a seasonal edge -- NBA regular season ended April 11, 2026.
+- Soccer markets consistently show ~0pp edge after multi-source sportsbook verification (4+ cycles of evidence: Atletico, Arsenal, Brighton, Pistons)
+- Tennis overprices favorites by 6-12pp but matches expire before scan time

@@ -19,14 +19,17 @@ The agent starts with zero knowledge. After each cycle it writes a detailed repo
 
 ## Real Results
 
-After 11 autonomous cycles (April 4–9, 2026), the agent:
+After 30 autonomous cycles (April 4–12, 2026), the agent:
 
-- Scanned 550+ markets, analyzed ~50 in depth
-- Executed **4 paper trades** across geopolitics and elections
-- Won its first resolution (+$21 on "US forces enter Iran by Apr 30" YES)
-- Took its first loss (-$301 on "US-Iran ceasefire by Apr 15" NO — Pakistan brokered a surprise deal)
-- Self-diagnosed the loss: identified 4 root causes (missed Pakistan mediation, over-applied status quo bias, violated its own 90% probability cap, poor risk-reward at NO $0.90)
-- Extracted 3 golden rules and updated its strategy autonomously
+- Scanned 1,500+ markets, analyzed ~100 in depth with web research
+- Executed **7 paper trades** across geopolitics, elections, and sports
+- **2 wins:** +$21 (US forces Iran YES), +$131 (Thunder/Nuggets NO — 23.5pp edge from rest-day mispricing)
+- **1 loss:** -$301 (Iran ceasefire NO — Pakistan brokered a surprise deal in 2 days)
+- **3 open positions:** Hungary election (resolving today), Iran conflict, US-Iran meeting
+- Self-diagnosed every loss, extracted 7 strategy rules and 17 golden rules autonomously
+- Learned to verify sportsbook odds across 3+ sources — prevented at least 2 bad trades
+
+See **[Real Results: 30 Autonomous Trading Cycles](docs/real-results.md)** for the full trade-by-trade breakdown, strategy evolution timeline, and how math analytics and web search drive every decision.
 
 ## How It Works
 
@@ -255,6 +258,7 @@ pytest tests/ -v
 
 | Doc | Contents |
 |-----|----------|
+| [Real Results](docs/real-results.md) | Trade-by-trade history, P&L, strategy evolution, analytics in action |
 | [Architecture](docs/architecture.md) | Two-layer design, agent pipeline, data flow |
 | [Tools Reference](docs/tools-reference.md) | All CLI tools with flags and examples |
 | [Scheduling](docs/scheduling.md) | Cron setup, heartbeat gating, monitoring |
