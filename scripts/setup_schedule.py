@@ -5,9 +5,9 @@ Reads CYCLE_INTERVAL from .env (e.g., '4h', '30m', '1d') and installs
 a crontab entry that runs run_cycle.sh on that schedule.
 
 Usage:
-    python tools/setup_schedule.py           # Install/update schedule
-    python tools/setup_schedule.py --remove  # Remove schedule
-    python tools/setup_schedule.py --show    # Show current crontab
+    python scripts/setup_schedule.py           # Install/update schedule
+    python scripts/setup_schedule.py --remove  # Remove schedule
+    python scripts/setup_schedule.py --show    # Show current crontab
 """
 
 import argparse
@@ -166,7 +166,7 @@ def main():
     print(f"  Interval: {interval}")
     print(f"  Cron expression: {cron_expr}")
     print(f"  PATH snapshot: .cron-env written")
-    print(f"  To remove: python tools/setup_schedule.py --remove")
+    print(f"  To remove: python scripts/setup_schedule.py --remove")
 
 
 if __name__ == "__main__":

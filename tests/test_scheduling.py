@@ -1,12 +1,12 @@
-"""Tests for tools/setup_schedule.py -- interval parsing and crontab management."""
+"""Tests for scripts/setup_schedule.py -- interval parsing and crontab management."""
 
 import os
 import sys
 
 import pytest
 
-# Make tools/ importable
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
+# Make scripts/ importable
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts"))
 
 from setup_schedule import interval_to_cron, CRON_MARKER
 

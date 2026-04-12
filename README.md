@@ -184,11 +184,13 @@ polymarket-autonomous-trader/
     get_market_intel.py       #   Macro intelligence
     enable_live.py            #   Live trading gate (4 criteria)
     validate_cycle.py         #   Cycle report validation
-  scripts/                    # Operations
+  scripts/                    # Operations (human-run, not agent-called)
     run_cycle.sh              #   Cycle launcher (tmux, PID lock, timeout)
     heartbeat.py              #   Lightweight signal generator (no LLM)
     install_cron.sh           #   Cron management
+    setup_schedule.py         #   Alternative cron setup via CYCLE_INTERVAL
     status.sh                 #   System health check
+  reset_agent.sh              # Reset DB, reports, strategy (manual utility)
   .claude/
     CLAUDE.md                 #   Agent instructions (5-phase cycle)
     skills/                   #   Decision frameworks (6 skill docs)
@@ -252,6 +254,29 @@ All parameters in `.env`. See [`.env.example`](.env.example) for the full list.
 ```bash
 source .venv/bin/activate
 pytest tests/ -v
+```
+
+## Operations
+
+### Reset the agent
+
+Wipes the database, cycle reports, strategy, and calibration data — starting fresh:
+
+```bash
+./reset_agent.sh
+```
+
+This clears `trading.db`, `state/reports/`, `state/cycles/`, `state/strategy.md`, `knowledge/calibration.json`, and resets `state/bankroll.json` to $10,000. Use this when you want the agent to start learning from scratch. Does not touch `state/core-principles.md`, `knowledge/golden-rules.md`, or `.env`.
+
+### Alternative scheduling
+
+Besides `scripts/install_cron.sh`, you can use the Python-based scheduler:
+
+```bash
+source .venv/bin/activate
+python scripts/setup_schedule.py           # Install cron from CYCLE_INTERVAL in .env
+python scripts/setup_schedule.py --remove  # Remove cron entries
+python scripts/setup_schedule.py --show    # Show current crontab
 ```
 
 ## Documentation
