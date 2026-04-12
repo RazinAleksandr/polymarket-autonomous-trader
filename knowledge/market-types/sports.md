@@ -75,4 +75,10 @@ Claude populates through trading experience.
 
 ## Lessons Learned
 
-Claude populates through trading experience.
+### 2026-04-11 — Thunder vs Nuggets WIN (+$130.55, 65.4% return)
+**Observation:** Bought NO (against Thunder) at $0.57, 350 shares. OKC rested ALL starters (SGA, Williams, Holmgren, Hartenstein OUT), only 8 players available including 3 two-way contracts. Sportsbook consensus had Nuggets at 78-85% implied but Polymarket had Thunder at 43.5% — a 23.5pp edge, the largest ever found. Five independent sportsbook sources confirmed the line. Nuggets won easily, resolved same day.
+**Takeaway:** Rest-day games in the NBA regular season finale can produce massive Polymarket mispricing. Retail bettors on Polymarket don't adjust for lineup news as fast as sportsbooks. When structural factors (all starters sitting) exist AND 3+ sportsbooks confirm, the edge is real. This is a seasonal anomaly — NBA regular season ended April 11, 2026.
+
+### 2026-04-11 — Soccer markets show zero structural edge (6+ cycles of data)
+**Observation:** Across 6+ cycles (Atletico Madrid, Arsenal, Brighton, Man City, Newcastle, Crystal Palace), soccer match markets on Polymarket consistently showed 0-1.5pp gap after multi-source sportsbook de-vig verification. No tradeable edge was found in any soccer single-match market.
+**Takeaway:** Soccer single-match markets on Polymarket are efficiently priced. Do not spend analysis bandwidth on them unless a structural factor (major injury, suspension, fixture congestion) creates a clear reason for mispricing. Season-long markets (EPL winner) may differ.

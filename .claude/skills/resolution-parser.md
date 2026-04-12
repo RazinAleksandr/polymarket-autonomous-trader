@@ -219,10 +219,9 @@ After processing individual outcomes, calculate aggregate metrics:
    the average estimated_prob. If we say 70% on average and win 70% of the time
    in that bucket, we're well-calibrated.
 
-3. **Write to performance tracker:**
-   - Append cycle results to `state/performance.md`
-   - Update running statistics
-   - Flag categories with deteriorating performance
+3. **Update calibration tracker:**
+   - Record outcomes via `python tools/record_outcome.py` to update `knowledge/calibration.json`
+   - Flag categories with deteriorating performance (Brier > 0.30 or |error_pp| > 20)
 
 ---
 

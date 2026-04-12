@@ -22,6 +22,7 @@ Every trading session begins with:
 3. Read these files for context:
    - `state/strategy.md` -- your evolving trading strategy
    - `state/core-principles.md` -- immutable guardrails (NEVER modify)
+   - `state/bankroll.json` -- current bankroll balance (use this for sizing, not the $10,000 default)
    - 3 most recent `state/reports/cycle-*.md` files (sorted descending)
    - `knowledge/golden-rules.md` -- accumulated trading wisdom (when it exists)
 4. Log: "Starting trading cycle {cycle_id}"
@@ -91,8 +92,9 @@ Analyze outcomes, update calibration, write cycle report, evolve strategy.
 4. Write cycle report to `state/reports/cycle-{cycle_id}.md`
 5. Update `state/strategy.md` with max 0-3 evidence-backed changes
 6. If any post-mortem yielded a golden-rule candidate (loss > 2% bankroll OR 2+ repeated patterns): add to `knowledge/golden-rules.md` following its format. Max 3 new rules per cycle.
-7. For each category traded this cycle: append a dated "Lessons Learned" entry to `knowledge/market-types/{category}.md` with observation and evidence
-8. Log cycle summary: markets scanned, analyzed, traded, P&L impact
+7. For each category with a resolved position this cycle: append a dated "Lessons Learned" entry to `knowledge/market-types/{category}.md` with: observation, root causes (if loss), actionable takeaway. Also update the "Edge Sources" and "Resolution Mechanics" sections if new data was learned. This step is NOT optional -- every resolution must produce a category lesson.
+8. Update `state/bankroll.json` balance: subtract realized losses, add realized gains from any positions resolved this cycle. This keeps position sizing accurate for future cycles.
+9. Log cycle summary: markets scanned, analyzed, traded, P&L impact
 
 ---
 
