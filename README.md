@@ -4,6 +4,40 @@ This repo contains the autonomous Polymarket trading system plus its planning an
 
 **For the full trading agent documentation, see [`src/README.md`](src/README.md).**
 
+## TLDR
+
+An AI agent that autonomously trades [Polymarket](https://polymarket.com) prediction markets — binary YES/NO contracts on real-world events (elections, ceasefires, sports outcomes). Every 2 hours, cron wakes Claude up; Claude scans markets, researches each candidate with real-time web search, estimates probabilities, and executes paper trades where it finds edge. After each cycle it writes a post-mortem, tracks its own calibration with Brier scores, and updates its strategy. Starts with zero rules, builds its own playbook from experience.
+
+- **Learns from itself.** Every trade (win or loss) becomes a recorded outcome, updates per-category calibration, and may spawn a new strategy rule or golden rule
+- **Not a hardcoded bot.** Claude reads news, reasons about events, and forms its own probability estimates
+- **Safe by design.** Paper trading default, 5% max per position, 30% max exposure, 5-loss pause, live trading locked behind a performance gate
+- **Full audit trail.** Every cycle writes a detailed markdown report with sources, reasoning, P&L — 35+ cycles and counting
+
+Current: 35+ autonomous paper cycles, 7 trades, realized -$149 on $10K bankroll (one big geopolitical loss dominates), 3 open positions. See [`src/docs/real-results.md`](src/docs/real-results.md) for the full trade-by-trade breakdown.
+
+## TLDR: Architecture
+
+Two layers that talk through the command line.
+
+**Python instrument layer** (`src/lib/`, `src/tools/`) — stateless CLI scripts. `discover_markets.py` hits Polymarket's Gamma API. `execute_trade.py` places orders on CLOB via py-clob-client. `calculate_kelly.py` does the sizing math. `record_outcome.py` updates calibration. They take args, print JSON to stdout, exit. No AI.
+
+**Claude Code agent layer** (`src/.claude/`) — one Claude Code session per cycle, no sub-agents. Reads `CLAUDE.md` for the 5-phase cycle (check positions → find opportunities → analyze → size & execute → learn & evolve). Loads 6 skill docs on demand as analytical frameworks:
+
+- `evaluate-edge.md` — bull/bear research and probability synthesis
+- `size-position.md` — Kelly criterion with category caps
+- `calibration-check.md` — apply past-accuracy corrections
+- `resolution-parser.md` — handle resolved markets
+- `post-mortem.md` — classify mistakes, extract rules
+- `cycle-review.md` — write report, update strategy
+
+**Every cycle Claude reads:** `state/strategy.md` (its own evolving playbook), `state/core-principles.md` (immutable guardrails), `state/bankroll.json`, `knowledge/golden-rules.md`, `knowledge/calibration.json`, last 3 cycle reports.
+
+**Every cycle Claude writes:** a report in `state/reports/`, 0-3 strategy updates, category lessons, bankroll/calibration deltas.
+
+**Scheduling:** `scripts/heartbeat.py` (every 10 min, no LLM) signals whether there's work. `scripts/run_cycle.sh` (every 2h) launches Claude in tmux with a 20-min timeout if the signal is hot. Forced daily cycle at 2 AM UTC.
+
+**Persistence:** SQLite (`trading.db`) for trades/positions/decisions, markdown for strategy/reports/rules, JSON for calibration/bankroll/signals. Everything append-only, git-versioned, fully auditable.
+
 ## Structure
 
 ```
@@ -13,7 +47,6 @@ This repo contains the autonomous Polymarket trading system plus its planning an
 ├── README.md                       # This file
 └── src/                            # The trading system itself
     ├── .claude/                    # Trading agent's instructions (CLAUDE.md + 6 skills)
-    ├── CLAUDE.md
     ├── README.md                   # Full trading agent docs — START HERE
     ├── docs/                       # Real results, architecture, live trading, scheduling
     ├── lib/                        # Core Python library (config, db, strategy, calibration)
