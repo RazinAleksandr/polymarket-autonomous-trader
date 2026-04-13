@@ -42,13 +42,6 @@ README.md                   brief repo overview
 src/                        the trading system
 ```
 
-## Sibling reference projects
-
-When this repo's `.git` is at `/home/trader/` level, sibling directories exist at the same level:
-- `AI-Trader/`, `polymarket-agent/`, `polymarket_claude/`, `Vibe-Trading/`, `TradingAgents/`
-
-These are reference implementations the trading system was built from. They are gitignored — do not commit them. See `.planning/research/PROJECT_COMPARISON_REPORT.md` for the comparison that drove architectural decisions.
-
 ## Candidate next work (v2.0)
 
 Two research docs in `.planning/research/` propose the highest-leverage improvements:

@@ -5,7 +5,7 @@ polymarket_claude/
 Vibe-Trading/
 TradingAgents/
 
-# Claude Code CLI user-level config (when .git is at /home/trader/ level)
+# Claude Code CLI user-level config (defensive: prevents committing global ~/.claude contents if mixed in)
 # Only commit our own .claude/CLAUDE.md and skills — never cache, sessions, credentials
 .claude/backups/
 .claude/cache/

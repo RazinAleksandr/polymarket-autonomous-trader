@@ -70,17 +70,9 @@ GSD (Get Shit Done) workspace that tracks system-level design, build history, an
 
 Each phase folder has: `XX-YY-PLAN.md` + `XX-YY-SUMMARY.md` per plan, plus phase-level `CONTEXT.md`, `DISCUSSION-LOG.md`, optional `RESEARCH.md` / `VALIDATION.md` / `VERIFICATION.md`.
 
-## Sibling Reference Projects
+## Source Projects
 
-When this repo is checked out at `/home/trader/` level, these sibling directories are reference-only (gitignored):
-
-- `AI-Trader/` — best platform infrastructure (macro regime, ETF flows, news sentiment)
-- `polymarket-agent/` — best architecture & safety (Python tools, SQLite, live CLOB integration)
-- `polymarket_claude/` — best trading knowledge (golden rules, calibration, category playbooks)
-- `TradingAgents/` — multi-agent debate framework (research target for v2.0 integration)
-- `Vibe-Trading/` — additional patterns (bull/bear debate structure, context compression)
-
-See [`.planning/research/PROJECT_COMPARISON_REPORT.md`](.planning/research/PROJECT_COMPARISON_REPORT.md) for the full source-project comparison and [`.planning/research/FINAL_SYSTEM_DESIGN.md`](.planning/research/FINAL_SYSTEM_DESIGN.md) for the original design that drove the build. Both are historical — the current live docs are `src/README.md` and `.planning/PROJECT.md`.
+The trading system was built by cherry-picking from three reference implementations. See [`.planning/research/PROJECT_COMPARISON_REPORT.md`](.planning/research/PROJECT_COMPARISON_REPORT.md) for the comparison and [`.planning/research/FINAL_SYSTEM_DESIGN.md`](.planning/research/FINAL_SYSTEM_DESIGN.md) for the original design that drove the build. Both are historical — current live docs are `src/README.md` and `.planning/PROJECT.md`.
 
 ## Two-Level Development
 
