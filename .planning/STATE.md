@@ -2,133 +2,89 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
+current_plan: none
 status: v1.0 milestone complete
-stopped_at: Completed 04-03-PLAN.md
-last_updated: "2026-03-27T08:45:38.895Z"
+stopped_at: All 6 phases complete — system running autonomously since 2026-04-05
+last_updated: "2026-04-12T12:00:00Z"
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 15
-  completed_plans: 15
+  total_phases: 6
+  completed_phases: 6
+  total_plans: 16
+  completed_plans: 16
 ---
 
-# Project State
-
-## Project Reference
-
-See: .planning/PROJECT.md (updated 2026-03-26)
-
-**Core value:** The agent must autonomously trade, analyze its own performance, and improve its strategy over time — no human intervention required between scheduled cycles.
-**Current focus:** Phase 04 — scheduling-and-safety-hardening
+# Execution State
 
 ## Current Position
 
-Phase: 04
-Plan: Not started
+- **Phase:** 6 (ALL COMPLETE)
+- **Current Plan:** None — milestone v1.0 finished
+- **Status:** Complete — all 6 phases delivered
+
+## Progress
+
+[██████████] 100% — 16/16 plans complete
+
+## Decisions
+
+- Removed nested .git from polymarket-trader/ to avoid submodule issues
+- Used quarter-Kelly (0.25) as default Kelly fraction in size-position skill
+- Set MIN_EDGE_THRESHOLD at 0.04 (4pp), lower than old 0.10 for single-agent architecture
+- Included 4 worked examples in evaluate-edge for comprehensive coverage
+- Used evidence-tiered hierarchy (outcome > calibration > process) for strategy updates
+- Capped strategy changes at 0-3 per cycle with anti-drift rules
+- Calibration corrections expire after N trades to prevent stale adjustments
+- Golden rules require 2+ repeated patterns or single >2% loss
+- [Phase 02]: Added Taught-by citations to Rules 8-10, 13 that lacked them in source material
+- [Phase 02]: Broadened oscars.md to entertainment.md covering awards, TV, box office, streaming
+- [Phase 02]: Created finance.md as new playbook seeded from golden rules 4 and 5
+- [Phase 02]: Used hyphenated market-types directory name per D-09 convention
+- [Phase 02]: Archived 15 multi-agent-era strategy rules, reset strategy.md for autonomous discovery
+- [Phase 02]: Rewrote core-principles.md from 24 session-specific rules to 7 focused immutable guardrails with percentage-based sizing
+- [Phase 03]: error_pp sign convention: positive=underconfident, negative=overconfident, per (stated_prob - actual) * 100
+
+- [Phase 03]: Used alternative.me free API for Fear & Greed, Alpha Vantage NEWS_SENTIMENT for category news
+- [Phase 03]: Regime classification requires 2+ concordant ETF SMA signals with 0 opposing
+- [Phase 03]: resolve_needed returns True on first run (no resolve report = trigger)
+- [Phase 03]: Dual expiry windows: 24h for resolve_needed (urgent), 48h for expiring_soon (informational)
+- [Phase 03]: state/signal.json added to .gitignore as generated runtime state
+- [Phase 04]: load_bankroll() placed in config.py with safe $10k default on missing/corrupt file
+- [Phase 04]: Removed all OpenAI/anthropic references from requirements, env files, setup_wallet.py, and CLAUDE.md
+- [Phase 04]: Portfolio/tools still use dollar-based function params (deferred, not broken by Config change)
+- [Phase 04]: 20-minute timeout on Claude sessions with 25-minute stale PID threshold
+- [Phase 04]: run_cycle.sh falls back to direct execution if tmux not available
+- [Phase 05]: Phase B uses --limit 50 with 0.10-0.85 sweet spot and 14-day resolution filter
+- [Phase 05]: Phase E expanded to 8 steps with explicit record_outcome.py, golden-rules, and playbook evolution
+- [Phase 05]: Gamma API batch size set to 200 to ensure enough raw markets survive post-filters
+- [Phase 05]: Removed obsolete test_core_principles_has_placeholder after Phase 2 rewrite
+- [Phase 05]: Used 16 as baseline golden rules count (verified from source). Made Resolutions/Trades Executed/Cycle Metrics optional for zero-trade cycles.
+- [Phase 06]: get_calibration_health() uses -20pp threshold for unhealthy category detection
+- [Phase 06]: enable_live.py --check outputs JSON to stdout, human summary to stderr (matching CLI conventions)
+- [Phase 06]: Win rate computed from closed positions realized_pnl (positive = win)
+
+## Issues / Blockers
+
+None
 
 ## Performance Metrics
 
-**Velocity:**
+| Phase-Plan | Duration | Tasks | Files |
+|-----------|----------|-------|-------|
+| 01-01 | 528s | 2 | 242 |
+| 01-02 | 473s | 3 | 5 |
+| Phase 02 P01 | 168 | 2 tasks | 4 files |
+| Phase 02 P02 | 179 | 2 tasks | 6 files |
+| Phase 02 P03 | 162 | 2 tasks | 3 files |
+| Phase 03 P01 | 224s | 2 tasks | 6 files |
+| Phase 03 P02 | 287s | 2 tasks | 3 files |
+| Phase 03 P03 | 249 | 2 tasks | 4 files |
+| Phase 04 P01 | 269s | 2 tasks | 8 files |
+| Phase 04 P02 | 194 | 2 tasks | 2 files |
+| Phase 05 P01 | 180s | 2 tasks | 3 files |
+| Phase 05 P02 | 355s | 1 tasks | 2 files |
+| Phase 06 P02 | 237s | 3 tasks | 4 files |
 
-- Total plans completed: 0
-- Average duration: —
-- Total execution time: 0 hours
+## Last Session
 
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| - | - | - | - |
-
-**Recent Trend:**
-
-- Last 5 plans: —
-- Trend: —
-
-*Updated after each plan completion*
-| Phase 01 P01 | 4min | 2 tasks | 11 files |
-| Phase 01 P03 | 3min | 2 tasks | 4 files |
-| Phase 01 P02 | 5min | 2 tasks | 8 files |
-| Phase 01 P05 | 2min | 2 tasks | 4 files |
-| Phase 01 P04 | 3min | 2 tasks | 3 files |
-| Phase 01 P06 | 1min | 2 tasks | 12 files |
-| Phase 02 P01 | 5min | 2 tasks | 8 files |
-| Phase 02 P03 | 3min | 2 tasks | 4 files |
-| Phase 02 P02 | 3min | 2 tasks | 3 files |
-| Phase 02 P04 | 3min | 2 tasks | 2 files |
-| Phase 03 P01 | 3min | 2 tasks | 6 files |
-| Phase 03 P02 | 2min | 1 tasks | 1 files |
-| Phase 04 P01 | 4min | 2 tasks | 6 files |
-| Phase 04 P02 | 5min | 2 tasks | 3 files |
-| Phase 04 P03 | 3min | 2 tasks | 2 files |
-
-## Accumulated Context
-
-### Decisions
-
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- [Roadmap]: Two-layer architecture — instrument layer must be fully hardened before agent layer begins
-- [Roadmap]: Claude sub-agents replace GPT-4o entirely; `openai` SDK to be removed
-- [Roadmap]: Paper mode must simulate realistic spreads (ask for buys, bid for sells) before Phase 1 ships
-- [Roadmap]: Sub-agents must output structured JSON schemas — prose output causes critical info loss at handoffs
-- [Phase 01]: Config uses @dataclass with load_config() factory function, not module-level globals
-- [Phase 01]: Console logging to stderr (stdout reserved for JSON tool output per D-02)
-- [Phase 01]: DataStore accepts explicit db_path param (no hidden config import)
-- [Phase 01]: Trade schema extended with neg_risk and fill_price columns for v2 auditing
-- [Phase 01]: Strategy module is pure math functions with no Config import for maximum testability
-- [Phase 01]: tools/ CLI scripts use sys.path.insert(0, project_root) to resolve lib/ imports
-- [Phase 01]: get_fill_price inverts CLOB API side semantics: BUY queries SELL book for best ask, SELL queries BUY book for best bid
-- [Phase 01]: CLI tools use sys.path.insert for lib/ importability when run as standalone scripts
-- [Phase 01]: lib/market_data.py functions take explicit params (no global config import); CLI tools pass config values in
-- [Phase 01]: Stateless functions instead of PortfolioManager class for CLI tool compatibility
-- [Phase 01]: Unrealized P&L persisted to DB on each portfolio summary call for consistency
-- [Phase 01]: Stateless trade execution functions (not class-based) for direct CLI tool composability
-- [Phase 01]: Paper trades let ValueError propagate when CLOB unreachable (D-10: no fake fills)
-- [Phase 01]: validate_order checks price in (0,1) range and notional >= order_min_size USDC
-- [Phase 01]: Deleted all 9 v1 root .py files per D-06, preserved setup_wallet.py for Phase 4
-- [Phase 02]: Plain Python dict checks for schema validation instead of jsonschema library -- avoids adding a dependency
-- [Phase 02]: Cycle data (state/cycles/*/) excluded from git via .gitignore but .gitkeep preserved for directory tracking
-- [Phase 02]: Unignored .claude/agents/ in .gitignore to track agent definitions while keeping other .claude/ files private
-- [Phase 02]: Risk Manager uses correlation_factor 0.5 for correlated positions; Planner maxTurns: 8, Risk Manager/Reviewer maxTurns: 10
-- [Phase 02]: .gitignore changed from .claude/ to .claude/* with !.claude/agents/ so agent definitions are version-controlled
-- [Phase 02]: Sub-agent frontmatter pattern: name, description, tools, model: inherit, maxTurns, permissionMode: bypassPermissions
-- [Phase 02]: Main agent maxTurns set to 50 for full pipeline execution (5 sub-agent spawns + trade execution + validation)
-- [Phase 02]: validate_execution_results in test file (not lib/) since main agent validates inline in prompt logic
-- [Phase 03]: Core Principles moved from strategy.md section to separate state/core-principles.md per D-06
-- [Phase 03]: Strategy Updater maxTurns set to 8 matching Planner for safety margin
-- [Phase 03]: validate_strategy_update checks 7 top-level required keys and 3 per-change-item keys
-- [Phase 03]: Strategy Updater failure is non-blocking -- cycle already complete after Reviewer step
-- [Phase 03]: core-principles.md is NEVER modified by any agent, read-only at cycle start
-- [Phase 03]: strategy.md modified ONLY by Strategy Updater sub-agent in Step 7
-- [Phase 04]: Gate-pass check is first validation in live mode, before private key check
-- [Phase 04]: PolyApiException caught before generic Exception to ensure 401 retry works
-- [Phase 04]: get_paper_cycle_stats counts cycle report files (not trade rows) per Pitfall 6
-- [Phase 04]: PID-file locking (not flock) for macOS compatibility
-- [Phase 04]: .cron-env PATH snapshot written at install time instead of dynamic NVM/tool detection
-- [Phase 04]: setup_schedule.py reads CYCLE_INTERVAL from os.environ via dotenv (no Config dependency)
-- [Phase 04]: Gate tool uses stderr for human output, stdout for JSON (matching existing CLI tool pattern)
-- [Phase 04]: Safety tests verify Plan 01 implementations rather than creating new production code
-
-### Pending Todos
-
-None yet.
-
-### Blockers/Concerns
-
-- [Phase 2]: Claude Code Task tool `--max-turns` interaction with sub-agent spawning is not fully documented — verify empirically during Phase 2 planning
-- [Phase 2]: Sub-agent output schema validation mechanics need design decision during Phase 2 planning
-- [Phase 1]: Gamma API rate limits not documented — may need empirical testing to determine scanner batch size
-
-### Quick Tasks Completed
-
-| # | Description | Date | Commit | Directory |
-|---|-------------|------|--------|-----------|
-| 260330-cb9 | Fix run_cycle.sh cron environment bug causing instant cycle exits and add failure logging | 2026-03-30 | 9f8808e | [260330-cb9-fix-run-cycle-sh-cron-environment-bug-ca](./quick/260330-cb9-fix-run-cycle-sh-cron-environment-bug-ca/) |
-
-## Session Continuity
-
-Last activity: 2026-03-30 - Completed quick task 260330-cb9: Fix run_cycle.sh cron environment bug causing instant cycle exits and add failure logging
-Stopped at: Completed 04-03-PLAN.md
-Resume file: None
+- **Timestamp:** 2026-04-12T12:00:00Z
+- **Stopped At:** All phases complete. System running 30+ autonomous trading cycles since April 5.

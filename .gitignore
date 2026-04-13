@@ -1,47 +1,35 @@
-# Python
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
-dist/
-build/
+# Sibling reference projects (not part of this repo)
+AI-Trader/
+polymarket-agent/
+polymarket_claude/
+Vibe-Trading/
+TradingAgents/
 
-# Environment
-.env
+# Claude Code CLI user-level config (when .git is at /home/trader/ level)
+# Only commit our own .claude/CLAUDE.md and skills — never cache, sessions, credentials
+.claude/backups/
+.claude/cache/
+.claude/sessions/
+.claude/session-env/
+.claude/file-history/
+.claude/projects/
+.claude/plugins/
+.claude/history.jsonl
+.claude/.credentials.json
+.claude/mcp-needs-auth-cache.json
+.claude/policy-limits.json
+.claude/settings.json
 
-# IDE
-.vscode/
-.idea/
+# OS / editor
+.DS_Store
+Thumbs.db
 *.swp
 *.swo
 
-# Data
-*.db
-*.sqlite
-.live-gate-pass
+# Python (if outer ever runs python)
+__pycache__/
+*.pyc
+.venv/
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs
-*.log
-logs/
-
-# GSD / Taches (submodules)
-get-shit-done/
-taches-cc-resources/
-
-# Claude (settings, cache, worktrees, etc.)
-.claude/*
-# But allow agent definition files (sub-agent prompts are code)
-!.claude/CLAUDE.md
-!.claude/skills/
-
-# Agent cycle intermediate data (ephemeral)
-state/cycles/*/
-!state/cycles/.gitkeep
-
-# Generated runtime state
-state/signal.json
+# Worktrees directory (if user keeps worktrees at repo root)
+.worktrees/

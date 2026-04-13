@@ -1,274 +1,348 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-03-25
+**Analysis Date:** 2026-04-02
 
 ## Test Framework
 
 **Runner:**
-- Python's standard unittest framework (no pytest installed)
-- Tests are simple functions with assertions, executed directly
+- pytest 7.x+ (inferred from pytest.ini and test patterns)
+- Config: `pytest.ini` at `/home/trader/polymarket-agent/pytest.ini`
 
-**Config:** Tests override `DB_PATH`, `LOG_FILE`, and `PAPER_TRADING` before importing modules
-```python
-os.environ["DB_PATH"] = tempfile.mktemp(suffix=".db")
-os.environ["PAPER_TRADING"] = "true"
-os.environ["LOG_FILE"] = tempfile.mktemp(suffix=".log")
-```
+**Assertion Library:**
+- pytest built-in assertions
+- pytest.approx() for floating-point comparisons (see `test_kelly.py`)
 
-**Run command:**
+**Run Commands:**
 ```bash
-python tests/test_paper_trading.py
+cd /home/trader/polymarket-agent && source .venv/bin/activate
+pytest                           # Run all tests
+pytest tests/test_kelly.py       # Run specific test file
+pytest -k test_positive_edge     # Run tests matching pattern
+pytest --tb=short                # Short traceback format (configured in pytest.ini)
+pytest -q                        # Quiet mode (configured in pytest.ini)
 ```
 
-**Assertion library:**
-- Built-in Python `assert` statements with comparison operators
-- No pytest, unittest.TestCase, or external assertion libraries
+**Configuration:**
+```ini
+# pytest.ini
+[pytest]
+testpaths = tests
+python_files = test_*.py
+python_functions = test_*
+addopts = -x -q --tb=short
+```
+- `-x`: Stop on first failure
+- `-q`: Quiet output
+- `--tb=short`: Short traceback format
 
 ## Test File Organization
 
 **Location:**
-- Single test file: `tests/test_paper_trading.py`
-- Tests import modules from parent directory via `sys.path.insert()`
+- Tests in `tests/` directory (sibling to `lib/` and `tools/`)
+- Co-located by purpose, not by module
 
 **Naming:**
-- Functions prefixed with `test_`: `test_config()`, `test_data_store()`, `test_trader_paper()`
-- No test class wrapping (flat function structure)
+- Test files: `test_*.py` (e.g., `test_kelly.py`, `test_trading.py`, `test_market_data.py`)
+- Test functions: `test_*` (e.g., `test_positive_edge`, `test_no_edge`)
+- Test classes: `Test*` (e.g., `TestKellyCriterion`, `TestCalculateEdge`)
 
 **Structure:**
 ```
 tests/
-└── test_paper_trading.py
-    ├── test_config()
-    ├── test_data_store()
-    ├── test_market_discovery()
-    ├── test_strategy()
-    ├── test_portfolio()
-    ├── test_strategy_stats_empty()
-    ├── test_pnl_from_resolved_positions()
-    ├── test_trader_paper()
-    └── if __name__ == "__main__":
-            [run all tests sequentially]
+├── conftest.py              # Shared fixtures
+├── test_kelly.py            # lib/strategy.py tests
+├── test_trading.py          # lib/trading.py tests
+├── test_pricing.py          # lib/pricing.py tests
+├── test_market_data.py      # lib/market_data.py tests
+├── test_config.py           # lib/config.py tests
+├── test_db.py               # lib/db.py tests
+└── test_portfolio.py        # lib/portfolio.py tests
 ```
+
+**Total Test Coverage:** ~3304 lines across test files (calculated: `wc -l tests/*.py`)
 
 ## Test Structure
 
-**Setup pattern:** Tests initialize components directly
+**Suite Organization - Class-based:**
+
+Most test files use class grouping by function/concern:
+
 ```python
-def test_data_store():
-    from data_store import DataStore
-    store = DataStore()
+class TestKellyCriterion:
+    """Tests for kelly_criterion() function."""
 
-    # Test operations
-    trade_id = store.record_trade(...)
+    def test_positive_edge(self):
+        """kelly_criterion with positive edge returns positive fraction."""
+        result = kelly_criterion(0.60, 0.50, fraction=1.0)
+        assert result > 0
 
-    # Assertions
-    assert trade_id > 0
-    store.close()
+    def test_no_edge(self):
+        """kelly_criterion with no edge (prob == price) returns 0."""
+        result = kelly_criterion(0.50, 0.50, fraction=1.0)
+        assert result == 0.0
 ```
 
-**Teardown pattern:** Explicit `.close()` calls
+From `tests/test_kelly.py`:
+- Classes group related tests: `TestKellyCriterion`, `TestCalculateEdge`, `TestCalculatePositionSize`
+- Each test method is independent and focused on one behavior
+- Docstrings describe the test scenario in human-readable form
+
+**Setup & Teardown - Fixtures:**
+
+Fixtures in `conftest.py` handle setup/teardown:
+
 ```python
-store.close()  # closes SQLite connection
-print("✓ data_store OK")
+@pytest.fixture
+def tmp_db_path():
+    """Provide a temporary database file path, cleaned up after test."""
+    path = tempfile.mktemp(suffix=".db")
+    yield path
+    if os.path.exists(path):
+        os.remove(path)
+
+@pytest.fixture
+def test_config(tmp_db_path, tmp_log_path):
+    """Create a Config with temporary file paths for testing."""
+    return Config(db_path=tmp_db_path, log_file=tmp_log_path, paper_trading=True)
+
+@pytest.fixture
+def store(tmp_db_path):
+    """Create a DataStore with a temporary database, closed after test."""
+    ds = DataStore(db_path=tmp_db_path)
+    yield ds
+    ds.close()
 ```
 
-**No setup/teardown functions:** Each test is self-contained with local initialization
+**Assertions:**
 
-**Isolation:** Each test uses a temporary database via `tempfile.mktemp(suffix=".db")`
-```python
-os.environ["DB_PATH"] = tempfile.mktemp(suffix=".db")
-store = DataStore(db_path=tempfile.mktemp(suffix=".db"))
-```
+Simple, specific assertions:
+- Direct comparison: `assert result == 0.0`
+- Inequality: `assert result > 0`
+- Approximate floating-point: `assert result == pytest.approx(0.15)`
+- Membership: `assert "error message" in result`
+- Type/existence: `assert market is not None`
 
 ## Mocking
 
-**Approach:** Minimal mocking — tests prefer real component integration
+**Framework:** `unittest.mock` (built-in)
 
-**Live API calls:** `test_market_discovery()` calls actual Gamma API
-```python
-def test_market_discovery():
-    from market_discovery import fetch_active_markets
-    markets = fetch_active_markets(limit=3, min_volume=100, min_liquidity=50)
-    assert len(markets) > 0
-```
+**Patterns:**
 
-**No external mocking:** OpenAI API not tested; market analysis tests don't exist
+1. **Mocking functions:**
+   ```python
+   @patch("lib.pricing.ClobClient")
+   def test_get_fill_price_buy(mock_clob_cls):
+       mock_client = MagicMock()
+       mock_client.get_price.return_value = {"price": "0.65"}
+       mock_clob_cls.return_value = mock_client
+       
+       price = get_fill_price(FAKE_TOKEN, "BUY", FAKE_HOST)
+       assert price == 0.65
+   ```
+   - `@patch()` replaces the target at test time
+   - `MagicMock()` creates a mock object with arbitrary methods
+   - `return_value` sets what the mock returns when called
+   - `assert_called_once_with()` verifies the mock was called with correct args
 
-**Data objects created inline:** For unit tests, construct test dataclasses directly
-```python
-market = Market(
-    id="test-456",
-    condition_id="cond-456",
-    question="Test market?",
-    yes_token_id="token-yes-456",
-    # ... all fields provided
-)
-```
+2. **Mocking side effects (exceptions):**
+   ```python
+   @patch("lib.trading.get_fill_price")
+   def test_paper_trade_fails_on_no_liquidity(mock_fill_price):
+       mock_fill_price.side_effect = ValueError("No liquidity for BUY on token tok-1")
+       store = MagicMock()
+
+       with pytest.raises(ValueError, match="No liquidity"):
+           execute_paper_trade(...)
+   ```
+   - `side_effect` makes the mock raise an exception
+
+3. **Verifying mock calls:**
+   ```python
+   mock_client.get_price.assert_called_once_with(FAKE_TOKEN, "SELL")
+   store.record_trade.assert_called_once()
+   ```
+
+**What to Mock:**
+- External APIs: `requests.get`, `ClobClient`
+- Database: `DataStore` methods when testing logic that depends on DB
+- Side effects: file I/O, network calls
+
+**What NOT to Mock:**
+- Pure logic functions: `kelly_criterion()`, `calculate_edge()`
+- Dataclass creation: `Market(...)`, `TradeSignal(...)`
+- Simple getters/setters
+- Configuration loading (use fixture instead)
 
 ## Fixtures and Factories
 
-**Test data pattern:** Inline dataclass construction for each test
+**Test Data Patterns:**
 
-**Example from `test_trader_paper()`:**
-```python
-signal = TradeSignal(
-    market_id="test-456",
-    question="Test market?",
-    side="YES",
-    token_id="",
-    price=0.60,
-    size=5.0,
-    cost_usdc=3.0,
-    edge=0.10,
-    kelly_raw=0.20,
-    kelly_adjusted=0.05,
-    confidence=0.7,
-    reasoning="Test trade",
-)
-```
+1. **Factory functions for test data:**
+   ```python
+   def _make_raw_market(**overrides) -> dict:
+       """Create a raw Gamma API market dict with sensible defaults."""
+       base = {
+           "id": "12345",
+           "conditionId": "0xcondition123",
+           "question": "Will X happen?",
+           # ... more fields
+       }
+       base.update(overrides)
+       return base
 
-**No factory functions or fixtures defined** — each test manually constructs needed objects
+   def _make_market(**overrides) -> Market:
+       """Create a Market dataclass with sensible defaults."""
+       defaults = {
+           "id": "12345",
+           "condition_id": "0xcondition123",
+           # ... more fields
+       }
+       defaults.update(overrides)
+       return Market(**defaults)
+   ```
 
-**No shared fixtures:** No conftest.py or shared setup
+   From `tests/test_market_data.py` — factories provide sensible defaults and allow override for specific test cases.
+
+2. **Shared fixtures:**
+   - `conftest.py` provides: `tmp_db_path`, `tmp_log_path`, `test_config`, `store`
+   - Fixtures use `tempfile.mktemp()` for isolated, cleaned-up test artifacts
+
+**Location:**
+- Fixtures: `tests/conftest.py` (shared across all tests)
+- Test data factories: within test files as helper functions (e.g., `_make_raw_market()`)
 
 ## Coverage
 
-**Requirements:** Not enforced; no coverage configuration found
+**Requirements:** No explicit coverage target enforced
 
-**What's tested:**
-- Core workflows: config, data persistence, strategy calculations, paper trading
-- Error paths: graceful degradation (e.g., empty stats on no trades)
-- Integration: full stack (market discovery, trader, portfolio)
+**View Coverage:**
+```bash
+pip install pytest-cov
+pytest --cov=lib --cov-report=html
+# Open htmlcov/index.html
+```
 
-**What's NOT tested:**
-- Live trading (code exists but not tested)
-- Market analyzer (requires OpenAI API)
-- Wallet setup (requires blockchain interaction)
-- Portfolio risk checks (called but assertions minimal)
-- Logging correctness (just calls functions)
+**Observational coverage:** Test files cover:
+- Core business logic: `lib/strategy.py` (Kelly criterion, edge calculation)
+- Data parsing: `lib/market_data.py` (Gamma API parsing, filtering)
+- Execution: `lib/trading.py` (paper/live trade execution)
+- Configuration: `lib/config.py` (env var + CLI override chain)
+- Persistence: `lib/db.py` (SQLite CRUD operations)
+- Pricing: `lib/pricing.py` (CLOB pricing with side semantics)
 
 ## Test Types
 
-**Integration tests** (majority of tests):
-- Scope: Full module functionality with real databases
-- Approach: Create components, exercise workflows, verify state changes
-- Example: `test_data_store()` records trades, opens/closes positions, checks stats
-- No mocks; real SQLite DB (in temp file)
+**Unit Tests (Primary):**
+- Scope: Single function or method in isolation
+- Approach: Mock external dependencies, test logic path by path
+- Example: `test_kelly.py` tests Kelly criterion math with various inputs (positive edge, no edge, negative edge, boundaries)
+- Focus: Input → Output behavior, not integration
 
-**Unit tests** (Kelly criterion only):
-```python
-def test_strategy():
-    from strategy import kelly_criterion, TradeSignal
+**Integration Tests (Secondary):**
+- Scope: Multiple modules working together
+- Approach: Real fixtures where practical (e.g., real DataStore with temp DB)
+- Example: `test_trading.py` tests trade execution with mocked CLOB but real DB writes
+- Pattern: Use `store` fixture to test actual data flow through SQLite
 
-    # Kelly: 60% chance, buying at 0.50
-    k = kelly_criterion(0.60, 0.50, fraction=1.0)
-    assert k > 0
-
-    # Kelly: no edge (50% at 0.50)
-    k = kelly_criterion(0.50, 0.50, fraction=1.0)
-    assert k == 0
-
-    # Kelly: negative edge
-    k = kelly_criterion(0.40, 0.50, fraction=1.0)
-    assert k == 0
-```
-
-**E2E tests:** Not present — no browser or end-to-end orchestration tests
+**E2E Tests (Not used):**
+- No end-to-end tests in codebase
+- Would require running actual Polymarket API and wallet — not practical in CI
 
 ## Common Patterns
 
-**Assertions used:**
-- `assert condition` — simple boolean check
-- `assert value == expected` — equality
-- `assert len(collection) == count` — collection size
-- `assert dict_key in dict` — key presence
-- `assert 0 < value < 1` — range checks
-- `assert abs(a - b) < tolerance` — float comparison with epsilon
-  ```python
-  assert abs(stats["total_pnl"] - 3.0) < 1e-6, f"Expected ~3.0, got {stats['total_pnl']}"
-  ```
+**Async Testing:**
+Not used — all code is synchronous
 
-**Error assertion pattern:**
+**Error Testing:**
 ```python
-k = kelly_criterion(0.50, 0.50, fraction=1.0)
-assert k == 0, f"Expected zero Kelly, got {k}"
+def test_paper_trade_fails_on_no_liquidity(mock_fill_price):
+    """Paper trade fails when CLOB API is unreachable."""
+    mock_fill_price.side_effect = ValueError("No liquidity for BUY on token tok-1")
+    store = MagicMock()
+
+    with pytest.raises(ValueError, match="No liquidity"):
+        execute_paper_trade(
+            market_id="mkt-3",
+            # ... args
+        )
 ```
 
-**Multi-step test pattern:**
+**Floating-point Comparisons:**
 ```python
-# Step 1: Record data
-trade_id = store.record_trade(...)
-assert trade_id > 0
+def test_edge_positive(self):
+    """Positive edge when estimated prob > market price."""
+    result = calculate_edge(0.65, 0.50)
+    assert result == pytest.approx(0.15)
 
-# Step 2: Fetch data
-positions = store.get_open_positions()
-assert len(positions) == 1
-
-# Step 3: Mutate
-store.close_position("test-123", exit_price=0.75)
-
-# Step 4: Verify final state
-positions = store.get_open_positions()
-assert len(positions) == 0
+# For tighter tolerance:
+assert result == pytest.approx(0.166667, abs=1e-5)
 ```
 
-**P&L verification with tolerance:**
+**Boolean/Tuple Return Testing:**
 ```python
-def test_pnl_from_resolved_positions():
-    # ... setup ...
-    store.close_position("pnl-test-001", exit_price=0.80)
-    stats = store.get_strategy_stats()
+def test_validate_order_valid():
+    """Valid order: notional 10.0 >= 5.0 minimum."""
+    valid, msg = validate_order(0.50, 20.0, 5.0)
+    assert valid is True
+    assert msg == ""
 
-    # Realized PnL = (0.80 - 0.50) * 10 = 3.0
-    assert abs(stats["total_pnl"] - 3.0) < 1e-6, \
-        f"Expected ~3.0, got {stats['total_pnl']}"
-    assert stats["win_rate"] == 1.0
+def test_validate_order_minimum():
+    """Order notional 0.20 below 5 USDC minimum."""
+    valid, msg = validate_order(0.10, 2.0, 5.0)
+    assert valid is False
+    assert "below minimum" in msg
 ```
 
-**Test output verbosity:**
+**Boundary & Edge Case Testing:**
 ```python
-print(f"✓ market_discovery OK ({len(markets)} markets)")
-print("\n✓ All tests passed!")
+def test_boundary_zero_price(self):
+    """kelly_criterion returns 0 when price is 0."""
+    result = kelly_criterion(0.60, 0.0)
+    assert result == 0.0
+
+def test_boundary_price_at_one(self):
+    """kelly_criterion returns 0 when price is 1.0."""
+    result = kelly_criterion(0.60, 1.0)
+    assert result == 0.0
+
+def test_position_size_respects_bankroll(self):
+    """Position size does not exceed available bankroll."""
+    result = calculate_position_size(
+        0.90, 0.50, bankroll=30.0,
+        kelly_fraction=1.0, max_position_usdc=100.0,
+    )
+    assert result["size_usdc"] <= 30.0
 ```
 
-## Running Tests
-
-**Manual execution:**
-```bash
-python tests/test_paper_trading.py
-```
-
-**Output:**
-```
-✓ config OK
-✓ data_store OK
-✓ market_discovery OK (N markets)
-✓ strategy OK
-✓ portfolio OK
-✓ strategy_stats_empty OK
-✓ pnl_from_resolved_positions OK
-✓ trader paper mode OK
-
-✓ All tests passed!
-```
-
-**Each test prints single-line summary upon success**
-
-**No parallelization:** Tests run sequentially
-
-## Test Design Philosophy
-
-**Real integrations over mocks:** Tests call actual Gamma API, use real SQLite
-
-**Pragmatic assertion:** String formatting in assertion messages for debugging
+**Exact Math Verification:**
 ```python
-assert stats["win_rate"] == 1.0, f"Expected 1.0 win_rate, got {stats['win_rate']}"
+def test_full_kelly_math(self):
+    """Verify the exact Kelly math: (b*p - q) / b where b=(1-price)/price."""
+    prob = 0.70
+    price = 0.50
+    b = (1 - price) / price  # net odds = 1.0
+    q = 1 - prob  # 0.30
+    expected = (b * prob - q) / b  # (0.70 - 0.30) / 1.0 = 0.40
+    result = kelly_criterion(prob, price, fraction=1.0)
+    assert result == pytest.approx(expected)
 ```
 
-**Temp files for isolation:** Each test gets fresh temporary database path
+## Test Execution Notes
 
-**Single-file test suite:** All tests in one file for simplicity; no test discovery framework
+**No test parametrization found:**
+- Each test case is separate function/method
+- Values are hardcoded in each test
+
+**No fixtures for state cleanup across test classes:**
+- `monkeypatch` used in `test_config.py` to manage environment variables
+- Temp files cleaned up by fixture teardown (`yield` pattern)
+
+**Frontend Testing (Vibe-Trading):**
+- No test files found
+- No testing framework configured
+- No vitest.config or jest.config present
+- Components are untested
 
 ---
 
-*Testing analysis: 2026-03-25*
+*Testing analysis: 2026-04-02*

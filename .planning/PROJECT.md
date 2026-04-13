@@ -1,119 +1,89 @@
-# Polymarket Autonomous Trading Agent v2
+# Autonomous Polymarket Trading Agent
 
 ## What This Is
 
-A two-layer autonomous trading system for Polymarket prediction markets. The **instrument layer** provides Python tools for market data, order execution, and portfolio tracking. The **agent layer** is a multi-agent Claude system (running via Claude Code CLI) that uses those tools to discover opportunities, make trading decisions, execute trades, and continuously evolve its own strategy based on results — like a human financial analyst learning from experience.
+A self-modifying autonomous trading agent for Polymarket prediction markets, where Claude Code IS the trader. Built on top of the working `polymarket-agent/` codebase (11 CLI tools, Gamma + CLOB API integration, SQLite database, 167 passing tests), this system copies that foundation into a new `polymarket-trader/` directory and restructures it so Claude operates as a single autonomous agent — reading its own strategy files, making all trading decisions through reasoning, and rewriting its own rules and playbooks based on outcomes. Python tools are hands (fetch data, place orders, do math); Claude's reasoning is the brain.
 
 ## Core Value
 
-The agent must autonomously trade, analyze its own performance, and improve its strategy over time — no human intervention required between scheduled cycles.
+Claude autonomously trades Polymarket prediction markets, learns from every outcome, and evolves its own strategy over time — no human picks markets, sizes positions, or edits rules.
 
 ## Requirements
 
 ### Validated
 
-- [x] Instrument layer: Python tools for market discovery, price data, order execution, portfolio tracking — *Validated in Phase 01: instrument-layer*
-- [x] Agent layer: Claude Code main agent orchestrating sub-agents via Task tool — *Validated in Phase 02: agent-layer*
-- [x] Sub-agent: Market Scanner — finds and filters interesting markets from Gamma API — *Validated in Phase 02: agent-layer*
-- [x] Sub-agent: Market Analyst — deep-dives specific markets for probability estimation — *Validated in Phase 02: agent-layer*
-- [x] Sub-agent: Risk Manager — evaluates portfolio risk and position sizing — *Validated in Phase 02: agent-layer*
-- [x] Sub-agent: Planner — reads strategy + sub-agent outputs, creates concrete trade plan — *Validated in Phase 02: agent-layer*
-- [x] Sub-agent: Trade Reviewer — post-trade analysis of successes and failures — *Validated in Phase 02: agent-layer*
-- [x] Strategy system: Markdown strategy doc that Claude builds from scratch and evolves after each cycle — *Validated in Phase 03: strategy-evolution*
-- [x] Sub-agent: Strategy Updater — reads Reviewer output, incrementally updates strategy.md, commits changes — *Validated in Phase 03: strategy-evolution*
+- [x] Single-agent architecture: skill reference docs created, CLAUDE.md rewritten as autonomous trader — Validated in Phase 1
+- [x] Knowledge base transplant: 16 golden rules, 6 category playbooks, calibration seed, strategy lifecycle, edge sources — Validated in Phase 2
+- [x] Immutable guardrails: core-principles.md with 7 guardrails (paper-default, 5% max position, 30% max exposure, live gate, no deletion, record-before-confirm, 5-loss pause) — Validated in Phase 2
+- [x] Self-modifying strategy: strategy.md reset for autonomous discovery, prior rules archived — Validated in Phase 2
+- [x] Calibration tracking: lib/calibration.py with Brier scores, category accuracy, auto-generated corrections; record_outcome.py CLI — Validated in Phase 3
+- [x] Market intelligence: lib/market_intel.py with ETF macro regime, Fear & Greed, news sentiment; get_market_intel.py CLI — Validated in Phase 3
+- [x] Heartbeat signal: scripts/heartbeat.py reads local state only, writes signal.json with scan/resolve/learn flags — Validated in Phase 3
+- [x] Test coverage: 234 tests passing (51 new for calibration, market_intel, heartbeat) — Validated in Phase 3
+- [x] Config changes: widen resolution window (14d), lower min edge (4pp), bankroll-% position sizing via load_bankroll() — Validated in Phase 4
+- [x] Cycle automation: run_cycle.sh with heartbeat gating, PID locking, tmux sessions, 20-min timeout — Validated in Phase 4
+- [x] OpenAI removal: zero openai/anthropic references in code, requirements, env files; ALPHA_VANTAGE_API_KEY replaces OPENAI_API_KEY — Validated in Phase 4
+- [x] Test coverage: 261 tests passing (32 new for config and run_cycle) — Validated in Phase 4
+- [x] Autonomous cycle validation: CLAUDE.md Phase B/E tuned, validate_cycle.py built, 5 real cycles executed via Claude CLI, strategy evolved with 3 rules, first trade placed — Validated in Phase 5
+- [x] Test coverage: 278 tests passing (17 new for validate_cycle and strategy evolution) — Validated in Phase 5
 
 ### Active
-- [ ] Strategy system: Configurable parameters (edge thresholds, Kelly fraction, filters) that agent can adjust
-- [ ] Reporting: Per-cycle markdown reports with trade analysis, reasoning, and results
-- [x] Scheduling: Configurable job frequency (hourly, daily, etc.) triggering full trading cycles — *Validated in Phase 04: scheduling-and-safety-hardening*
-- [x] Paper trading mode as default with path to live trading — *Validated in Phase 01: instrument-layer*
-- [x] Persistent state: Trade history, position tracking, strategy evolution history — *Validated in Phase 01: instrument-layer*
-- [x] Safety gates: Live trading gate with paper P&L verification, 401 credential refresh, order normalization — *Validated in Phase 04: scheduling-and-safety-hardening*
+
+- [ ] Heartbeat + cron scheduling: 10-min heartbeat, 30-min gated cycles, daily forced full scan
+- [ ] Paper trading validation: 20-50 autonomous cycles proving strategy evolution and positive P&L trend
+- [ ] Live trading gate: enable_live.py with criteria (10 cycles, positive P&L, >50% win rate, operator confirmation)
 
 ### Out of Scope
 
-- Web UI or dashboard — CLI/file-based only
-- Real-time streaming — batch cycles on schedule
-- Multi-exchange support — Polymarket only
-- Backtesting engine — learn from live paper trading instead
-- Human approval per trade — fully autonomous after configuration
+- Frontend/dashboard — CLI agent only, no React UI (future milestone)
+- Live money deployment — paper trading focus, wallet funding deferred
+- Multi-agent architecture — single Claude session by design, no sub-agent spawning
+- OpenAI/GPT integration — Claude IS the AI, no Python LLM wrappers
+- Vibe-Trading/AI-Trader frontend code — ideas borrowed, code not ported
+- Mobile app or web interface — monitored via logs and state files
 
 ## Context
 
-**Existing codebase (reference material):**
-An earlier version exists in this repo with working implementations of: Gamma API market discovery, OpenAI GPT-4o market analysis, Kelly criterion sizing, paper/live trade execution via py-clob-client, SQLite persistence, and portfolio management. This code should be reviewed and good solutions cherry-picked, but the new system is a fresh build with a fundamentally different architecture.
+**Base project:** `polymarket-agent/` — the only project with working end-to-end code. Has 11 Python CLI tools, Gamma API + CLOB API integration, paper + live order execution via py-clob-client, SQLite database with 5 tables, 167/189 tests passing, category-specific fee calculation, wallet signing for Polygon, cron scheduling via tmux.
 
-**Key existing code worth reviewing:**
-- `market_discovery.py` — Gamma API integration, Market dataclass, JSON parsing for stringified fields
-- `trader.py` — py-clob-client order execution, paper/live mode switching
-- `portfolio.py` — position tracking, resolved market detection
-- `data_store.py` — SQLite schema (trades, positions, decisions tables)
-- `setup_wallet.py` — wallet generation, L2 credential derivation, token allowances
-- `strategy.py` — Kelly criterion math
+**Knowledge source:** `polymarket_claude/` — 14 golden rules (battle-tested, loss-cited), 5 category playbooks, calibration tracking pattern, heartbeat-before-LLM pattern, Bayesian probability estimation framework, strategy lifecycle system.
 
-**External APIs:**
-- Gamma API (`gamma-api.polymarket.com`) — market discovery, metadata
-- CLOB API (`clob.polymarket.com`) — order placement, orderbook data
-- Polygon RPC — on-chain allowances (live mode setup only)
+**Idea sources:** Vibe-Trading (bull/bear adversarial debate structure, context compression), AI-Trader (macro regime detection, ETF flows, news sentiment).
 
-**Architecture — two layers:**
+**Key architectural insight:** Sub-agents fragment intelligence. A single Claude session that sees everything — portfolio, strategy, calibration history, market data — makes holistically better decisions than 8 specialized sub-agents passing JSON between each other.
 
-1. **Instrument Layer (Python):** Stateless tools that do concrete things. Fetch markets. Get prices. Place orders. Track P&L. Record data. No decision-making — pure execution.
-
-2. **Agent Layer (Claude Code CLI):** The brain. A main Claude agent that:
-   - Reads its own strategy document before each cycle
-   - Spawns 5 sub-agents via Task tool (Scanner, Analyst, Risk Manager, Planner, Reviewer)
-   - Calls instrument layer via Bash tool
-   - After each cycle: Reviewer generates report, main agent updates strategy
-   - Strategy evolves like a human analyst's playbook — market selection, analysis approach, risk parameters, trade rules
-
-**Agent cycle flow:**
-```
-Scheduled trigger
-  → Main Agent reads strategy.md
-  → Planner creates trade plan from strategy + market conditions
-  → Scanner finds candidate markets (calls instrument tools)
-  → Analyst evaluates each candidate (probability estimation)
-  → Risk Manager sizes positions (portfolio context)
-  → Main Agent executes trades (calls instrument tools)
-  → Reviewer analyzes results, writes cycle report
-  → Main Agent updates strategy.md based on learnings
-```
-
-**Strategy evolution:**
-Strategy starts blank. After each cycle, Claude analyzes what worked and what didn't. Over time, the strategy document grows to cover: which market types to target/avoid, how to weigh analysis factors, risk parameter adjustments, entry/exit rules. The goal is observable improvement in paper trading profitability.
+**Working directory:** New `polymarket-trader/` directory (copy of polymarket-agent/ then restructured). Source projects remain untouched as reference.
 
 ## Constraints
 
-- **Tech stack**: Python 3.12 for instrument layer, Claude Code CLI for agent layer
-- **Agent runtime**: Claude Code sessions spawning sub-agents via Task tool, calling Python via Bash
-- **Trading API**: Polymarket CLOB via py-clob-client
-- **Analysis**: Claude sub-agents (not OpenAI) for market analysis
-- **Persistence**: SQLite for trade data, markdown files for strategy/reports
-- **Safety**: Paper trading default. Never live without explicit user configuration.
-- **Existing code**: Review and cherry-pick, but don't inherit the old architecture
+- **Tech stack**: Python tools only (no LangChain, no OpenAI SDK). Claude Code is the AI runtime.
+- **APIs**: Polymarket Gamma API (discovery), CLOB API (execution), Alpha Vantage (market intel), Fear & Greed API (crypto sentiment)
+- **Database**: SQLite (existing, working) — immutable audit trail, Claude writes but never deletes
+- **Scheduling**: Cron + tmux + heartbeat pattern — zero-cost when idle
+- **Safety**: Paper trading default, live gate requires proof of competence, core principles are immutable
+- **Dependencies**: Minimal — py-clob-client, web3, eth-account, requests, python-dotenv. No AI libraries.
 
 ## Key Decisions
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
-| Two-layer architecture (instrument + agent) | Clean separation of execution tools from decision-making intelligence | ✓ Instrument layer shipped (Phase 01) |
-| Claude Code CLI as agent runtime | Native sub-agent spawning via Task tool, Bash for instrument calls | — Pending |
-| Multi-agent (5 sub-agents) | Specialization — each agent focuses on one concern like a team | — Pending |
-| Strategy from scratch | Avoid encoding human biases; let agent discover what works | ✓ 4-domain strategy.md + core-principles.md (Phase 03) |
-| Fresh codebase | Old architecture doesn't support agent layer; cherry-pick good code | ✓ V1 deleted, v2 lib/tools/ live (Phase 01) |
-| Per-cycle markdown reports | Human-readable audit trail; agent reads own history for learning | — Pending |
+| Single agent, no sub-agents | Sub-agents fragment intelligence; one session sees everything and reasons holistically | — Pending |
+| Skills (reference docs) instead of agents | Claude loads frameworks on demand vs rigid pipeline; preserves full reasoning chain | — Pending |
+| Copy to polymarket-trader/ | Clean start without breaking working polymarket-agent/ reference | — Pending |
+| Paper only for v1 | Prove the autonomous loop works before risking real money | — Pending |
+| Claude modifies its own CLAUDE.md | Enables true self-improvement — Claude can fix its own process | — Pending |
+| No frontend | CLI agent monitored via logs/state files; dashboard is future milestone | — Pending |
 
 ## Evolution
 
 This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd:transition`):
-1. Requirements invalidated? -> Move to Out of Scope with reason
-2. Requirements validated? -> Move to Validated with phase reference
-3. New requirements emerged? -> Add to Active
-4. Decisions to log? -> Add to Key Decisions
-5. "What This Is" still accurate? -> Update if drifted
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
 
 **After each milestone** (via `/gsd:complete-milestone`):
 1. Full review of all sections
@@ -122,4 +92,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-03-27 after Phase 04 completion — scheduling and safety hardening shipped (cron scheduling, live trading gate, 401 credential retry, comprehensive safety tests)*
+*Last updated: 2026-04-05 — Phase 5 (Autonomous Cycle Validation) complete: CLAUDE.md Phase B/E tuned, validate_cycle.py built, 5 real autonomous cycles executed, strategy evolved with 3 rules, first trade placed, 278 tests passing*

@@ -1,162 +1,203 @@
 # External Integrations
 
-**Analysis Date:** 2026-03-25
+**Analysis Date:** 2026-04-02
 
 ## APIs & External Services
 
-**Polymarket Platform:**
-- **Gamma API** - Market discovery and metadata
-  - Host: `https://gamma-api.polymarket.com`
-  - Client: `requests` library
-  - Endpoints: `/markets`, `/markets/{id}`, `/events`
-  - Used in: `market_discovery.py`
-  - Auth: None (public API)
+**Polymarket CLOB (Central Limit Order Book):**
+- Service: Polymarket decentralized prediction market exchange
+- What it's used for: Order placement, cancellation, position management, real-time price feeds for paper trading
+- SDK/Client: `py-clob-client` (>=0.17.0)
+- Auth: Private key signing (EOA wallet signature required)
+- Endpoint: `POLYMARKET_HOST` (default: https://clob.polymarket.com)
+- Implementation: `lib/trading.py` handles order creation, signing with `OrderArgs`, posting to CLOB API
+- Order format: GTC (Good-Til-Cancel) limit orders with signature_type=0 for EOA wallets
 
-- **CLOB API** - Order placement and position management
-  - Host: `https://clob.polymarket.com` (configurable via `POLYMARKET_HOST` env var)
-  - Client: `py-clob-client` (py-clob-client wrapper around HTTP)
-  - Used in: `trader.py`, `setup_wallet.py`
-  - Auth: L2 API credentials (api_key, api_secret, api_passphrase) derived from private key via `create_or_derive_api_creds()`
-  - Auth type: EOA signature_type=0 (Ethereum standard wallet, not Magic/email or browser proxy)
-  - Key operations:
-    - `create_order(OrderArgs)` - Create signed order
-    - `post_order(signed_order, OrderType.GTC)` - Submit GTC (Good-Till-Canceled) limit order
-    - `get_orders()` - Fetch open orders
-    - `cancel()` - Cancel order by ID
-    - `get_positions()` - Fetch live positions
-    - `get_midpoint(token_id)` - Fetch orderbook midpoint price
+**Gamma API:**
+- Service: Polymarket metadata and market discovery API
+- What it's used for: Fetching active markets, market metadata (volumes, liquidity, prices), market snapshots
+- SDK/Client: `requests` HTTP client (direct REST calls)
+- Auth: None (public API)
+- Endpoint: `GAMMA_API_URL` (default: https://gamma-api.polymarket.com)
+- Implementation: `lib/market_data.py` (`fetch_active_markets()`, `fetch_market_by_id()`)
+- Data format: JSON with stringified token IDs and outcome prices requiring `json.loads()` parsing
 
-**AI & Analysis:**
-- **OpenAI API** - Market probability estimation via GPT-4o
-  - Host: `https://api.openai.com`
-  - Client: `openai` Python SDK
-  - Model: `gpt-4o` (configurable via `OPENAI_MODEL` env var)
-  - Auth: `OPENAI_API_KEY` environment variable
-  - Integration: Responses API (`client.responses.create()`)
-  - Tools: `web_search` enabled (real-time search for market analysis context)
-  - Used in: `market_analyzer.py`
-  - Parallelization: ThreadPoolExecutor with 4 workers for batch analysis (`batch_analyze()`)
+**OpenAI GPT-4o:**
+- Service: Language model for market probability estimation and analysis
+- What it's used for: Analyzing market questions, estimating win probabilities, calculating trading edges, generating reasoning for trade decisions
+- SDK/Client: OpenAI Python SDK (referenced in legacy code, may need migration)
+- Auth: `OPENAI_API_KEY` environment variable
+- Feature: Responses API with optional `web_search` tool for real-time data
+- Implementation: Market analysis layer uses GPT-4o for probability synthesis
+
+**LangChain + LangGraph:**
+- Service: Agent orchestration and state machine framework
+- What it's used for: Vibe-Trading multi-agent workflow coordination, skill execution chains, persistent state management
+- SDK/Client: `langchain`, `langchain-openai`, `langgraph`, `langgraph-checkpoint`
+- Auth: Inherits from OpenAI API key (LangChain-OpenAI integration)
+- Implementation: `src/core/runner.py`, `src/providers/llm.py`, `src/core/state.py`
+
+**Data Providers:**
+- **Yahoo Finance (yfinance):** Equity market data, historical prices for global stocks
+- **Tushare:** Chinese A-share market data, fundamental data, technical analysis
+- **Alpha Vantage:** Stock market data, forex, technical indicators (optional, default "demo" key)
 
 ## Data Storage
 
 **Databases:**
-- **SQLite** - Local persistence
-  - Location: `trading.db` (path configurable via `DB_PATH` env var)
-  - Client: Python `sqlite3` standard library
-  - Purpose: Trade history, positions, decisions, market snapshots, strategy metrics
-  - Schema: 5 tables (trades, positions, decisions, market_snapshots, strategy_metrics)
-  - Accessed by: `data_store.py`
-  - No external server; embedded local file-based database
+
+**SQLite (polymarket-agent):**
+- Type/Provider: SQLite3 (embedded, file-based)
+- Connection: `DB_PATH` environment variable (default: `trading.db`)
+- Client: Python `sqlite3` standard library
+- Schema: 5 tables (trades, positions, decisions, market_snapshots, strategy_metrics)
+- Location: `lib/db.py` (`DataStore` class)
+- Purpose: Trade history audit, position tracking, decision logging, portfolio snapshots
+
+**DuckDB (Vibe-Trading):**
+- Type/Provider: DuckDB (embedded columnar database)
+- Connection: In-memory or file-based via DuckDB API
+- Client: DuckDB Python library
+- Purpose: Efficient backtesting queries, historical data analysis, portfolio statistics
+
+**PostgreSQL (AI-Trader optional):**
+- Type/Provider: PostgreSQL (when DATABASE_URL set)
+- Connection: `DATABASE_URL` environment variable (defaults to SQLite fallback)
+- Purpose: Production database for AI-Trader service
+- Fallback: SQLite at `DB_PATH` (service/server/data/clawtrader.db) if DATABASE_URL empty
 
 **File Storage:**
-- None (not applicable)
+- Local filesystem only
+- Trading logs: `trading.log` (structured JSON format)
+- State files: `state/strategy.md`, `state/core-principles.md` (markdown strategy documentation)
+- Cycle artifacts: `state/cycles/{cycle_id}/` directory (JSON outputs from sub-agents)
+- Reports: `state/reports/cycle-{cycle_id}.md` (cycle completion reports)
 
 **Caching:**
-- None (not applicable)
+- None detected (no Redis, Memcached, or similar)
+- In-memory state via LangGraph checkpoints (Vibe-Trading)
 
 ## Authentication & Identity
 
 **Auth Provider:**
-- Custom EOA (Externally Owned Account) wallet-based authentication
-  - Implementation: Ethereum private key signing
-  - Wallet generation: `eth_account.Account.create()` (see `setup_wallet.py`)
-  - Signature type: 0 (EOA), NOT type 1 (Magic/email) or 2 (browser proxy)
-  - Chain: Polygon mainnet (chain ID 137)
-  - Private key source: `PRIVATE_KEY` environment variable (required for live trading only; paper trading does not need it)
+- Custom: Ethereum wallet-based authentication
+  - EOA (Externally Owned Account) wallets via private key
+  - Polygon mainnet chain ID 137
 
-**API Key Management:**
-- OpenAI API Key: `OPENAI_API_KEY` environment variable
-- CLOB API Credentials: Derived on-the-fly from private key via `py_clob_client.create_or_derive_api_creds()`
-  - Creds include: `api_key`, `api_secret`, `api_passphrase`
-  - Valid for L2 authentication with CLOB API
+**Implementation:**
+- `eth-account` library for wallet generation and signing
+- `web3.py` for Polygon RPC connectivity and transaction signing
+- Private key stored in environment: `PRIVATE_KEY` (Ethereum hex string, required for live trading)
+- Paper trading mode: No private key required (default safe mode)
+- Token approvals: USDC approve, CTF (Conditional Token Framework) setApprovalForAll via `web3.py`
+
+**Session/State Management:**
+- LangGraph checkpoints for persistent agent state (Vibe-Trading)
+- SQLite position tracking for portfolio continuity (polymarket-agent)
+- No JWT or OAuth detected
 
 ## Monitoring & Observability
 
 **Error Tracking:**
-- None (not integrated)
+- None detected (no Sentry, DataDog, or similar external service)
+- Error logging goes to file and console
 
 **Logs:**
-- Dual-channel logging via `logger_setup.py`:
-  - **Console** (human-readable): stdout with format `%(asctime)s [%(levelname)s] %(name)s: %(message)s`
-  - **File** (machine-readable JSON): `trading.log` (configurable via `LOG_FILE` env var)
-  - Log level: configurable via `LOG_LEVEL` env var (default: INFO)
-  - Structured decision logging: `log_decision()` function embeds JSON metadata for key events (trade signals, analysis, market snapshots)
+- File: Structured JSON format written to `LOG_FILE` (default: `trading.log`)
+- Console: Human-readable with timestamp, level, module name
+- Framework: Python `logging` module with custom `JsonFormatter` in `lib/logging_setup.py`
+- Levels: DEBUG, INFO, WARNING, ERROR (configurable via `LOG_LEVEL`)
+- Decision logging: Specialized `log_decision()` function for tracking trade decisions with full context
+
+**Metrics:**
+- P&L tracking via SQLite `positions` table (unrealized, realized, cost basis)
+- Brier score calculation for closed positions (calibration analysis)
+- Portfolio snapshots captured in `market_snapshots` table
+- Strategy metrics table for tracking performance over time
 
 ## CI/CD & Deployment
 
 **Hosting:**
-- Not deployed; runs locally or on user's infrastructure
-- Autonomous loop via `main.py`
+- Local development: Vite dev server (npm run dev) on localhost:5173 or similar
+- Production: Self-hosted (no cloud platform required)
+  - FastAPI backend runs on Uvicorn (uvicorn[standard] >= 0.24.0)
+  - Frontend: Static files served via nginx or FastAPI static middleware
+  - Polymarket agent: Scheduled via cron or similar (no native CI detected)
 
 **CI Pipeline:**
-- None (not configured)
+- None detected (no GitHub Actions, GitLab CI, or Travis CI configuration)
+- Manual testing via pytest or direct script execution
+- Potential: `.github/workflows/` directory may exist in Vibe-Trading (not analyzed)
 
-**Graceful Shutdown:**
-- Signal handlers: SIGINT and SIGTERM
-- Cleanup on exit: position summary, strategy metrics, database closure
+**Scheduling:**
+- Bash scripts: `run_cycle.sh`, `schedule_trading.sh` for cron-style execution
+- Environment: `CYCLE_INTERVAL` (default: 4h)
+- Execution: Direct Python invocation or Claude Code CLI spawning sub-agents
 
 ## Environment Configuration
 
-**Required env vars:**
-- `OPENAI_API_KEY` - OpenAI API authentication (required for market analysis)
-- `PRIVATE_KEY` - Ethereum private key for live trading (required only if `PAPER_TRADING=false`)
+**Required env vars (polymarket-agent):**
+- `POLYMARKET_HOST`: CLOB API endpoint (default: https://clob.polymarket.com)
+- `GAMMA_API_URL`: Market data endpoint (default: https://gamma-api.polymarket.com)
+- `CHAIN_ID`: Polygon chain ID (default: 137)
+- `PAPER_TRADING`: Boolean flag (default: true, set false for live)
+- `PRIVATE_KEY`: Ethereum private key (required for live trading only)
 
-**Optional env vars:**
-- `PAPER_TRADING` (default: true) - Enable/disable live trading mode
-- `POLYMARKET_HOST` (default: https://clob.polymarket.com) - CLOB API host override
-- `CHAIN_ID` (default: 137) - Polygon chain ID
-- `MAX_POSITION_SIZE_USDC` (default: 50) - Max single position sizing
-- `MAX_TOTAL_EXPOSURE_USDC` (default: 200) - Max portfolio exposure limit
-- `MIN_EDGE_THRESHOLD` (default: 0.10) - Minimum 10% edge to trade
-- `KELLY_FRACTION` (default: 0.25) - Quarter-Kelly position sizing fraction
-- `MIN_VOLUME_24H` (default: 1000) - Market volume filter
-- `MIN_LIQUIDITY` (default: 500) - Market liquidity filter
-- `MAX_MARKETS_PER_CYCLE` (default: 10) - Markets to analyze per cycle
-- `LOOP_INTERVAL` (default: 300) - Seconds between trading cycles
-- `ORDER_CHECK_INTERVAL` (default: 60) - Seconds between order status checks
-- `DB_PATH` (default: trading.db) - SQLite database file path
-- `LOG_LEVEL` (default: INFO) - Python logging level
-- `LOG_FILE` (default: trading.log) - Structured JSON log file path
-- `OPENAI_MODEL` (default: gpt-4o) - OpenAI model override
-- `ENABLE_WEB_SEARCH` (default: true) - OpenAI Responses API web search tool
+**Optional env vars (polymarket-agent):**
+- `MIN_EDGE_THRESHOLD`: Minimum edge for trades (default: 0.10)
+- `KELLY_FRACTION`: Position sizing fraction (default: 0.25)
+- `MAX_POSITION_SIZE_USDC`: Per-trade limit (default: 50.0)
+- `MAX_TOTAL_EXPOSURE_USDC`: Portfolio limit (default: 200.0)
+- `MIN_VOLUME_24H`: Market filter (default: 1000.0)
+- `MIN_LIQUIDITY`: Market filter (default: 500.0)
+- `LOG_LEVEL`: Logging verbosity (default: INFO)
+- `CYCLE_INTERVAL`: Trading cycle frequency (default: 4h)
+
+**Vibe-Trading env vars:**
+- `OPENAI_API_KEY`: GPT-4o API key (required for LLM features)
+- Data provider keys: `TUSHARE_TOKEN`, Yahoo Finance (implicit via yfinance)
+- API endpoints: `ALPHA_VANTAGE_BASE_URL`, `HYPERLIQUID_API_URL`, etc.
+
+**AI-Trader env vars:**
+- `ALPHA_VANTAGE_API_KEY`: Stock data provider (default: "demo")
+- `POLYMARKET_GAMMA_BASE_URL`, `POLYMARKET_CLOB_BASE_URL`: Market endpoints
+- `DATABASE_URL`: PostgreSQL connection (optional, falls back to SQLite)
+- `VITE_REFRESH_INTERVAL`: Frontend refresh milliseconds
 
 **Secrets location:**
-- `.env` file in project root (must never be committed)
-- Never hardcoded in source files
-- Loaded via `python-dotenv` in `config.py`
+- `.env` file (never committed, listed in `.gitignore`)
+- `PRIVATE_KEY`: Ethereum wallet private key (hex string starting with 0x)
+- `OPENAI_API_KEY`: API key from OpenAI dashboard
 
 ## Webhooks & Callbacks
 
 **Incoming:**
-- None (not applicable)
+- None detected (no webhook endpoints for external systems calling back)
 
 **Outgoing:**
-- None (not applicable)
+- None detected (no outgoing webhook calls to external services)
+- Market resolution notifications: Handled via polling in portfolio monitoring (check_for_resolved_markets)
 
-## On-Chain Integration (Polygon Mainnet)
+**SSE (Server-Sent Events):**
+- `sse-starlette` (>=1.6.0) integrated in Vibe-Trading for real-time streaming
+- Used for agent response streaming to frontend clients
 
-**Smart Contracts:**
-- **USDC Token** - Address: `0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174`
-  - Function: `approve(spender, amount)` for Exchange allowance
-  - Used in: `setup_wallet.py` token allowance setup
+## Blockchain Integration
 
-- **CTF (Conditional Token Framework)** - Address: `0x4D97DCd97eC945f40cF65F87097ACe5EA0476045`
-  - Function: `setApprovalForAll(operator, approved)` for batch token approval
-  - Used in: `setup_wallet.py` token allowance setup
+**Network:**
+- Polygon mainnet (L2 scaling solution for Ethereum)
+- Chain ID: 137
+- RPC provider: Web3.py configured to connect to Polygon public RPC
 
-- **Exchange** - Address: `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E`
-  - Purpose: Primary Polymarket exchange contract
-  - Requires: USDC approve + CTF setApprovalForAll
+**Token Standard:**
+- ERC-20: USDC (stablecoin used for trading)
+- ERC-1155: Conditional Tokens (CTF) - outcome tokens for prediction markets
 
-- **Neg-Risk Exchange** - Address: `0xC5d563A36AE78145C45a50134d48A1215220f80a`
-  - Purpose: Separate contract for negative-risk (AMM-resolved) markets
-  - Requires: USDC approve + CTF setApprovalForAll
-
-**RPC Provider:**
-- **Polygon RPC** - `https://polygon-rpc.com`
-  - Used in: `setup_wallet.py` for wallet operations (gas price queries, tx submission, nonce tracking)
-  - Provider type: Web3.py HTTPProvider
+**Transactions:**
+- Token approvals: USDC `approve()` for trading contract
+- CTF setApprovalForAll: Allow position management
+- Order signing: Polymarket uses order signing (not on-chain submission for orders)
 
 ---
 
-*Integration audit: 2026-03-25*
+*Integration audit: 2026-04-02*

@@ -1,221 +1,214 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-03-25
+**Analysis Date:** 2026-04-02
 
 ## Tech Debt
 
-**Division by Zero in Strategy Sizing:**
-- Issue: `strategy.py` line 140 divides position_size by price without guard against zero or invalid prices
-- Files: `strategy.py:140`
-- Impact: If price is calculated as 0 or invalid from market data, trading will crash
-- Fix approach: Add explicit check `if price <= 0: return None` before division in `_evaluate_signal()`. Already has `0 < m.yes_price < 1` filter in discovery, but should double-check at execution point
+**Schema Migrations in __init__ (Fragile):**
+- Issue: Database schema migrations run inline in `DataStore.__init__()` via try-except blocks, swallowing `OperationalError` exceptions
+- Files: `/home/trader/polymarket-agent/lib/db.py:99-111`
+- Impact: Silent failures if ALTER TABLE commands fail for unexpected reasons (permission issues, concurrent access). New schema additions might silently not apply, causing downstream crashes.
+- Fix approach: Implement proper migration framework or at minimum log all migration attempts and their results. Test against fresh and existing databases.
 
-**Price Edge Cases in Market Parser:**
-- Issue: `market_discovery.py:121-122` defaults to 0.5 for missing prices but doesn't validate stringified JSON parsing
-- Files: `market_discovery.py:121-122`
-- Impact: If `json.loads()` on `outcomePrices` fails silently or returns None, defaults to 0.5 which may be incorrect
-- Fix approach: Add explicit validation after json.loads() to ensure both prices are valid floats in range [0, 1]
+**Database Connection Pooling Missing:**
+- Issue: Each DataStore instance creates a single `sqlite3.connect()` with no connection pooling or per-thread isolation
+- Files: `/home/trader/polymarket-agent/lib/db.py:15`
+- Impact: If multiple threads or processes access the same trading.db, SQLite's locking model may cause "database is locked" errors. Paper trading currently single-threaded but future parallelization (e.g., async sub-agents) could trigger this.
+- Fix approach: Add WAL mode to SQLite or switch to connection pooling with per-request isolation if concurrency is added.
 
-**Database Connection Not Thread-Safe:**
-- Issue: `data_store.py:14` opens single SQLite connection that may be shared across parallel threads in `market_analyzer.batch_analyze()`
-- Files: `data_store.py:14`, `market_analyzer.py:182`
-- Impact: SQLite in-memory transactions can deadlock or corrupt data if accessed concurrently
-- Fix approach: Either wrap DataStore access in locks or configure SQLite with `timeout=10` parameter and enable WAL mode
+**API Request Timeout Hardcoded:**
+- Issue: All external API calls use hardcoded timeouts (30s for Gamma API, 5s for fee API)
+- Files: `/home/trader/polymarket-agent/lib/market_data.py:47`, `/home/trader/polymarket-agent/lib/fees.py:123`
+- Impact: Slow networks or high-latency environments will experience more failures. No retry-with-backoff implemented.
+- Fix approach: Make timeouts configurable via config.py. Add exponential backoff for transient failures.
 
-**No Rate Limiting for OpenAI API:**
-- Issue: `market_analyzer.batch_analyze()` spawns 4 parallel workers without rate limiting or retry backoff
-- Files: `market_analyzer.py:182-192`
-- Impact: May hit OpenAI rate limits and silently drop analyses (failed futures just log, don't retry)
-- Fix approach: Add exponential backoff with max 3 retries on API errors, or implement request queue with delays
-
-**Hardcoded Position Size Limits:**
-- Issue: `strategy.py:130-134` applies position sizing limits but doesn't account for existing open positions in same market
-- Files: `strategy.py:130-134`
-- Impact: Could exceed per-market exposure if agent re-analyzes same market in subsequent cycles
-- Fix approach: Track per-market exposure in addition to total exposure check already in `strategy.py:56-61`
+**No Graceful Degradation for Missing API Fields:**
+- Issue: Market data parsing defensively checks for both camelCase and snake_case field names, but silently defaults to 0.0 or 0.5 for missing fields
+- Files: `/home/trader/polymarket-agent/lib/market_data.py:118-140`
+- Impact: Malformed API responses could silently propagate zeroed prices into trading decisions. A market with `yes_price=0.5` (default) is indistinguishable from one with actual 0.5 price.
+- Fix approach: Add explicit logging when defaults are used. Consider rejecting markets with missing required fields rather than defaulting.
 
 ## Known Bugs
 
-**Incorrect Kelly Fraction Application:**
-- Symptoms: `strategy.py:147` rounds price to 2 decimals but Kelly calculation uses full precision — inconsistency between sizing math and execution
-- Files: `strategy.py:123-147`
-- Trigger: Any market where full-precision price differs from 2-decimal rounded price
-- Workaround: Use rounded price in Kelly calculation too: `kelly_raw = kelly_criterion(prob, round(price, 2), ...)`
+**Price Parsing Double Negation Vulnerability:**
+- Symptoms: If market.yes_price is None or empty string, line 118 in market_data.py evaluates to 0.5 silently
+- Files: `/home/trader/polymarket-agent/lib/market_data.py:118-119`
+- Trigger: Gamma API returns `outcomePrices: ["", "0.25"]` or missing field entirely
+- Workaround: None currently; will accept 0.5 as actual price. Log monitoring can catch this.
+- Impact: Zero position sizing or incorrect Kelly calculations on affected markets
 
-**Market Resolution Detection Gap:**
-- Symptoms: `portfolio.py:50-69` checks `market.closed` but Gamma API may return stale data; positions not closed until next cycle
-- Files: `portfolio.py:50-69`
-- Trigger: Market resolves during cycle but agent doesn't know until next refresh
-- Workaround: Add periodic market status refresh separate from price updates, or rely on CLOB API for order fills
+**Position Reduce with Float Tolerance Too Lenient:**
+- Symptoms: Partial sells may leave residual share fractions due to 0.001 tolerance rounding
+- Files: `/home/trader/polymarket-agent/lib/db.py:326, 334`
+- Trigger: Sell 10.0025 shares from position of 10.00 shares
+- Workaround: Always round sell sizes to 2 decimals before calling reduce_position
+- Impact: Closed position may incorrectly retain 0.0025 shares if float arithmetic rounds differently
 
-**Win Rate Calculation with No Closed Positions:**
-- Symptoms: `data_store.py:215` falls back to edge-based win rate when no positions closed yet, but edge estimates are not realized outcomes
-- Files: `data_store.py:208-220`
-- Trigger: Early-stage agent with paper trades but no resolved markets
-- Workaround: Clearly document that early win_rate is estimated, not realized; add metadata flag `calculated_from_edge: bool`
+**Fee Rate API Graceful Failure:**
+- Symptoms: If /fee-rate endpoint returns no data or invalid JSON, fallback to category table happens silently without warning
+- Files: `/home/trader/polymarket-agent/lib/fees.py:121-133`
+- Trigger: CLOB API outage or malformed response
+- Workaround: Monitor log files for "Fee rate API lookup failed" warnings
+- Impact: Paper trading may use stale (March 2026) category fees rather than current API rates, underestimating actual costs
 
 ## Security Considerations
 
-**Private Key Exposure in Debug Output:**
-- Risk: `setup_wallet.py:32` prints private key and credentials to stdout
-- Files: `setup_wallet.py:32`, `setup_wallet.py:51-53`
-- Current mitigation: Instructions say "save securely" but no actual protection
-- Recommendations: Use `getpass()` for interactive input, never print full keys, only show checksum or last 4 chars
+**Private Key Exposure via Logging:**
+- Risk: If `config.private_key` is accidentally logged or included in exception tracebacks, it leaks the trading wallet
+- Files: `/home/trader/polymarket-agent/lib/config.py:25`, all modules importing config
+- Current mitigation: Private key never printed in log_decision() or standard logging. Config object properties are not logged.
+- Recommendations: Add secret field masking in __str__ method of Config dataclass. Add unit test to prevent logging of private_key field.
 
-**API Credentials in Logs:**
-- Risk: `logger_setup.py:10-20` may capture sensitive data in JSON logs if it's passed in log messages
-- Files: `logger_setup.py:10-20`, `market_analyzer.py:160`
-- Current mitigation: Log entries have `extra_data` dict but credentials should never be added
-- Recommendations: Add log sanitization filter that redacts API keys, secrets, private keys; audit all `log_decision()` calls
+**Unencrypted Database Storage:**
+- Risk: SQLite database (trading.db) stores all position and trade history in plaintext. Any filesystem access compromise leaks position sizes, realized P&L, and strategies
+- Files: `/home/trader/polymarket-agent/lib/db.py`
+- Current mitigation: Reliance on OS-level filesystem permissions
+- Recommendations: For production live trading, encrypt SQLite database at rest using sqlcipher or move to encrypted volume storage.
 
-**Web Search Enabled by Default:**
-- Risk: `config.py:45` enables OpenAI web_search which may leak prompt content to external services
-- Files: `config.py:45`, `market_analyzer.py:128`
-- Current mitigation: Web search only used for market analysis (not secret data), but still external call
-- Recommendations: Document privacy implications; consider opt-in instead of opt-out
-
-**SQLite DB File Permissions:**
-- Risk: `trading.db` contains trade history, positions, and strategy metrics — no encryption
-- Files: `data_store.py:12-14`
-- Current mitigation: .gitignore prevents commit, but file is world-readable on shared systems
-- Recommendations: Set file permissions to 0600 after creation; consider encrypting SQLite with `sqlcipher`
+**No Input Validation on Market ID:**
+- Risk: Market IDs are user-supplied strings passed directly to Gamma API requests without sanitization
+- Files: `/home/trader/polymarket-agent/lib/market_data.py:82`
+- Current mitigation: requests.get() URL-encodes parameters
+- Recommendations: Add explicit validation that market_id matches expected format (hex/alphanumeric) before API calls.
 
 ## Performance Bottlenecks
 
-**Sequential Market Fetching in Portfolio Update:**
-- Problem: `portfolio.py:27-48` loops through positions and calls `fetch_market_by_id()` one-by-one
-- Files: `portfolio.py:30-31`
-- Cause: N+1 API calls if agent has many positions
-- Improvement path: Batch fetch market data using Gamma API bulk endpoint or cache recent prices
+**Sequential Analyst Spawning in Trading Cycle:**
+- Problem: Per CLAUDE.md, analysts must run sequentially (not parallel) due to session failures. 10 markets = 10+ analyst spawns, each blocking until completion
+- Files: `/home/trader/polymarket-agent/.claude/CLAUDE.md:Step 2`
+- Cause: Sub-agent task queue or session state management issue not yet root-caused
+- Improvement path: Investigate why parallel analyst spawns fail. Implement batch analyst endpoint to process 5-10 markets per agent invocation. Could reduce cycle time by 5-10x.
 
-**Parallel Analysis Without Timeout:**
-- Problem: `market_analyzer.batch_analyze()` spawns 4 workers but workers have no timeout — one slow analysis blocks entire cycle
-- Files: `market_analyzer.py:182-192`
-- Cause: Future.result() called without timeout parameter
-- Improvement path: Add timeout to `as_completed(futures, timeout=30)` to skip markets that take too long
+**Gamma API Redundant Calls in Cycle:**
+- Problem: Position monitor, risk manager, and portfolio update all call fetch_market_by_id() for same markets, no caching
+- Files: `/home/trader/polymarket-agent/lib/portfolio.py:43`, `/home/trader/polymarket-agent/lib/market_data.py:70-89`
+- Cause: Stateless function design; no global or request-scoped cache
+- Improvement path: Add market cache with 5-minute TTL. Batch fetch multiple market IDs in single API call if Gamma API supports it.
 
-**Repeated Gamma API Calls:**
-- Problem: `main.py:104-108` fetches fresh market data again for execution after already analyzing same market
-- Files: `main.py:104-108`
-- Cause: Want fresh price at execution time, but doubles API load
-- Improvement path: Cache market data for short window (5-10s), use cached version if available
-
-**Sleep Loop in Main Cycle:**
-- Problem: `main.py:213-216` uses `time.sleep(1)` in a loop to check shutdown flag every 1 second
-- Files: `main.py:213-216`
-- Cause: Inefficient polling; burns CPU if LOOP_INTERVAL is large (default 300s)
-- Improvement path: Use event.wait(timeout) with threading.Event for shutdown signal
+**JSON Parsing Overhead:**
+- Problem: Market data parsing calls json.loads() on every market for outcomePrices (stringified JSON from API)
+- Files: `/home/trader/polymarket-agent/lib/market_data.py:107-116`
+- Cause: Gamma API limitation; necessary for compatibility
+- Improvement path: If Gamma API ever supports native JSON, remove double-parsing. Otherwise, cache parsed prices alongside raw market objects.
 
 ## Fragile Areas
 
-**JSON Parsing from Gamma API:**
-- Files: `market_discovery.py:110-119`
-- Why fragile: Gamma API returns stringified JSON in `clobTokenIds` and `outcomePrices` fields with inconsistent naming (camelCase vs snake_case) and sometimes missing values
-- Safe modification: Always test with live API responses; add schema validation; log raw JSON on parse failures
-- Test coverage: Only basic smoke test `test_market_discovery()` checks one response; need coverage for edge cases (empty prices, missing tokens, wrong data types)
+**Fee Parameters Table (Category-Specific Hardcoded):**
+- Files: `/home/trader/polymarket-agent/lib/fees.py:17-29`
+- Why fragile: Fee rate "exponent" parameters (e.g., 1, 0.5, 2) are hardcoded March 2026 assumptions. Polymarket docs may update without code change.
+- Safe modification: Add config-driven fee table that can be updated via .env or JSON file without code deploy.
+- Test coverage: No unit tests for fee calculations vs. actual Polymarket fees. Manual comparison needed after any fee update.
 
-**OpenAI Response Parsing:**
-- Files: `market_analyzer.py:73-97`
-- Why fragile: Uses regex to extract JSON from Claude responses that may return markdown, code blocks, or invalid JSON
-- Safe modification: Tighten JSON extraction regex; add fallback to re-request with stricter instruction; test with multiple model responses
-- Test coverage: No test for malformed OpenAI responses; only live tests would catch parsing failures
+**Kelly Criterion Implementation:**
+- Files: `/home/trader/polymarket-agent/lib/strategy.py:8-29`
+- Why fragile: Fractional Kelly (default 0.25) is hardcoded. Any change to kelly_fraction config requires testing across all edge cases (extreme probabilities, zero edge, high edge scenarios).
+- Safe modification: All callers pass kelly_fraction explicitly. Test against boundary cases (prob=0.01, prob=0.99, price near 0 or 1).
+- Test coverage: No unit test file exists. Paper trading verification only.
 
-**Portfolio Risk Limits:**
-- Files: `portfolio.py:71-100`
-- Why fragile: Warnings generated but never acted on (no automatic position closing or halt signal)
-- Safe modification: Add explicit threshold for `risk["utilization"]` where agent stops placing new trades; clear log message when threshold crossed
-- Test coverage: `test_portfolio()` only checks output format, not actual threshold enforcement
+**Position Tracking Assumptions:**
+- Files: `/home/trader/polymarket-agent/lib/db.py:139-166` (upsert_position), `/home/trader/polymarket-agent/lib/portfolio.py:78-128` (check_resolved_markets)
+- Why fragile: Assumes one position per market_id (UNIQUE constraint). If user holds both YES and NO on same market, system breaks.
+- Safe modification: Change primary key to (market_id, side) if hedge trades planned. Audit all position queries to handle multiple per market.
+- Test coverage: No test for hedge position scenarios.
 
-**Market Resolution Detection:**
-- Files: `portfolio.py:50-69`
-- Why fragile: Relies on Gamma API `market.closed` field which may lag reality or return incorrect values
-- Safe modification: Query CLOB API for order fills as additional signal; check time-based resolution (if end_date < now, assume resolved)
-- Test coverage: No test with actually-resolved markets; cannot verify closed position logic
+**CLOB Client Instantiation Without Caching:**
+- Files: `/home/trader/polymarket-agent/lib/pricing.py:41, 69, 90`
+- Why fragile: Every get_fill_price/get_best_bid/get_best_ask call creates a new ClobClient. If network is slow, overhead multiplies.
+- Safe modification: Create a module-level or class-level singleton ClobClient for read-only pricing. Be careful with live trading clients which need authentication.
+- Test coverage: No benchmarking of overhead.
 
 ## Scaling Limits
 
-**Single SQLite Database:**
-- Current capacity: ~100K rows before performance degrades significantly (no indexing)
-- Limit: Will become bottleneck at ~10+ trades per cycle over months of operation
-- Scaling path: Add indexes on `market_id`, `timestamp`, `status`; eventually migrate to PostgreSQL if needing historical analytics
+**SQLite Lock Contention:**
+- Current capacity: Single-threaded paper trading up to ~100 trades per cycle
+- Limit: If cycles parallelized or multiple agents write simultaneously, SQLite's per-connection lock will become bottleneck
+- Scaling path: Migrate to PostgreSQL for concurrent multi-writer scenarios. Alternatively, implement write queue with single writer thread.
 
-**Parallel Analysis Workers Fixed at 4:**
-- Current capacity: ~10-20 markets per cycle at 30s timeout per analysis
-- Limit: OpenAI rate limits (RPM/tokens per minute) will be hit with more workers
-- Scaling path: Make max_workers configurable; implement token counting and adaptive worker scaling
+**Market Discovery Pagination:**
+- Current capacity: fetch_active_markets() fetches 50 markets from Gamma API and filters locally, returns top N
+- Limit: If trading 100+ markets per cycle, API pagination inefficiency grows. Filtering happens client-side.
+- Scaling path: Push filters to Gamma API query params. Implement cursor-based pagination for large result sets.
 
-**Memory Growth from DataStore:**
-- Current capacity: All trades/positions loaded into python objects in loops
-- Limit: 10K+ trades will cause memory pressure on 4GB RAM systems
-- Scaling path: Use database queries with LIMIT/OFFSET for pagination; avoid loading entire history into memory
+**Position Monitoring Cost:**
+- Current capacity: Position monitor spawns one sub-agent task per cycle, reviews all open positions
+- Limit: With 50+ open positions, review cost scales linearly with position count
+- Scaling path: Batch position reviews (10-20 per analyzer) or implement lightweight heuristic pre-filters (e.g., only review positions down 20%+ or near resolution).
 
 ## Dependencies at Risk
 
-**py-clob-client Library:**
-- Risk: Community-maintained SDK with limited updates; may break with Polymarket contract upgrades
-- Impact: Live trading will fail if library becomes incompatible with new CLOB API versions
-- Migration plan: Monitor GitHub releases; have fallback to direct HTTP requests to CLOB API; document expected signature format
+**py-clob-client (>=0.17.0):**
+- Risk: Package is maintained by Polymarket team; breaking API changes in future versions not contractually guaranteed
+- Impact: If Polymarket updates py-clob-client with incompatible changes, live trading breaks until code updates
+- Migration plan: Pin to exact version (e.g., ==0.17.0) in requirements.txt. Monitor release notes. Plan 1-2 week buffer for testing before upgrading.
 
-**OpenAI Responses API:**
-- Risk: Responses API is experimental (as of March 2025); may be deprecated or pricing may change significantly
-- Impact: Analysis engine will need refactoring if API is removed or becomes cost-prohibitive
-- Migration plan: Keep fallback to regular Completions API; implement cost tracking per analysis
+**openai SDK (Python):**
+- Risk: Used for market analysis (GPT-4o) but not pinned to version. API changes or model discontinuation could break analysis step
+- Impact: If OpenAI deprecates "gpt-4o" model or changes Responses API, analyst sub-agent fails
+- Migration plan: Use exact version pinning for openai package. Maintain fallback to GPT-4 turbo if gpt-4o unavailable. Test quarterly with latest SDK.
 
-**ethaccounts Library (eth-account):**
-- Risk: Used only in setup_wallet.py; if Web3 ecosystem shifts, account signing may break
-- Impact: New wallet setup will fail, but existing wallets still work
-- Migration plan: Keep setup_wallet.py as reference; traders can manually fund wallet and set PRIVATE_KEY
+**requests (>=2.31.0):**
+- Risk: Minor; widely stable. But used in critical paths (market discovery, fee lookup). Timeout behavior changes between versions could affect retry logic.
+- Impact: Low; requests is mature
+- Migration plan: Continue to pin minor version (2.31.x) in requirements.txt
 
 ## Missing Critical Features
 
-**No Slippage Protection:**
-- Problem: Trader executes at signal.price as GTC limit order but no safeguard if price moves adverse before fill
-- Blocks: Cannot guarantee execution price in volatile markets; may miss profitable trades due to tight limits
+**No Live Gate Verification:**
+- Problem: Live trading is guarded only by PAPER_TRADING config boolean. No minimum paper trading requirement (e.g., 10 cycles, positive P&L) enforced
+- Blocks: Cannot safely transition to real money trading without human manual review
+- Impact: User could accidentally enable PAPER_TRADING=false and lose capital on untested strategy
+- Fix approach: Implement check in config validation that requires min_paper_cycles (currently in Config but not enforced) and min_paper_pnl before allowing live mode
 
-**No Position Management:**
-- Problem: Agent opens positions but has no logic to close winners early or cut losses
-- Blocks: Positions stay open until market resolves (days/weeks), missing opportunity to re-deploy capital
+**No Position-Level Stop Loss:**
+- Problem: Strategy can only generate new BUY signals. No automatic or manual stop-loss mechanism for losing positions
+- Blocks: Cannot limit downside on bad analysis. User must manually monitor and close
+- Impact: Uncapped losses on a single bad trade if edge estimate was wrong
+- Fix approach: Add stop-loss_percent to position tracking. Trigger automatic SELL in portfolio update if position hits threshold.
 
-**No Market Selection Bias Tracking:**
-- Problem: No analysis of which market categories agent does well/poorly in
-- Blocks: Cannot specialize strategy by market type; improvements are purely random
+**No Alert/Notification System:**
+- Problem: All logging is to console and JSON file. No email, Slack, or webhook alerts for critical events
+- Blocks: Unattended trading runs silently; user may not notice cycle failures or large losses for hours
+- Impact: Slower incident response
+- Fix approach: Add alerts module that sends notifications for: cycle failures, large P&L swings, risk limit breaches, unresolved trade execution failures
 
-**No A/B Testing Framework:**
-- Problem: No way to test different Kelly fractions, min_edge_thresholds, analysis prompts in parallel without manual changes
-- Blocks: Cannot optimize parameters scientifically; tuning is trial-and-error
+**No Manual Trade Override:**
+- Problem: Trade plan execution is fully automated. User cannot inject manual trades or halt cycle mid-execution
+- Blocks: Cannot react to breaking news or market anomalies during cycle
+- Impact: Inflexibility for time-sensitive situations
+- Fix approach: Add inter-process signal handling or webserver endpoint to pause/cancel cycle or inject manual trades
 
 ## Test Coverage Gaps
 
-**No Live API Integration Tests:**
-- What's not tested: Real Gamma API responses with edge cases (no prices, weird token IDs, missing fields)
-- Files: `market_discovery.py`, `market_analyzer.py`
-- Risk: Parser failures only discovered in production after encountering edge case
-- Priority: High — discovery and analysis are critical path
+**Fee Calculation vs. Live Polymarket Fees:**
+- What's not tested: No comparison between calculate_fee() results and actual fees charged on Polymarket CLOB
+- Files: `/home/trader/polymarket-agent/lib/fees.py`
+- Risk: Paper trading may underestimate fees by 10-50%, leading to live trading disappointment
+- Priority: High — fee estimation drives Kelly sizing directly
 
-**No Error Injection Tests:**
-- What's not tested: Network timeouts, API 502 errors, malformed JSON responses
-- Files: All API-calling modules
-- Risk: Agent crashes or hangs on transient errors instead of gracefully degrading
-- Priority: Medium — need resilience testing before live trading
+**Kelly Criterion Edge Cases:**
+- What's not tested: Probability at 0.0, 0.5, 1.0; price at 0.0, 0.5, 1.0; kelly_fraction=0, very high kelly_raw values
+- Files: `/home/trader/polymarket-agent/lib/strategy.py:8-29`
+- Risk: Extreme inputs could produce NaN, Infinity, or negative position sizes
+- Priority: High — used in every trade signal
 
-**No Concurrency Tests:**
-- What's not tested: DataStore used concurrently by multiple threads in batch_analyze()
-- Files: `data_store.py`, `market_analyzer.py`
-- Risk: Race conditions, SQLite locking issues only appear under load
-- Priority: High — concurrent design is risky without verification
+**Paper Trade Execution Accuracy:**
+- What's not tested: Does get_fill_price() match actual trade fills on Polymarket? Slippage estimation?
+- Files: `/home/trader/polymarket-agent/lib/pricing.py:16-53`, `/home/trader/polymarket-agent/lib/trading.py:51-163`
+- Risk: Paper trading P&L may be 10-20% optimistic compared to live fills
+- Priority: High — validates strategy profitability
 
-**No Edge Case Tests for Kelly Criterion:**
-- What's not tested: Prices at extremes (0.01, 0.99), very high/low probabilities, extreme Kelly values
-- Files: `strategy.py:27-46`
-- Risk: Edge cases in sizing math produce invalid position sizes
-- Priority: Medium — math is core to profitability
+**Position Resolution Detection:**
+- What's not tested: Does market.closed flag accurately reflect on-chain resolution? Latency between resolution and flag update?
+- Files: `/home/trader/polymarket-agent/lib/portfolio.py:78-128`
+- Risk: Resolved positions may remain open incorrectly if Gamma API has lag
+- Priority: Medium — affects P&L calculation accuracy
 
-**No Live Trading Tests:**
-- What's not tested: Actual order placement, signature verification, position tracking with real CLOB API
-- Files: `trader.py`, entire trading loop
-- Risk: First live trade may fail due to undiscovered issues (signature format, token ID format, order structure)
-- Priority: Critical — must test before ANY live trading
+**Database Schema Migrations:**
+- What's not tested: Adding new columns to existing database. Behavior on database with partial migration history.
+- Files: `/home/trader/polymarket-agent/lib/db.py:99-111`
+- Risk: Deployment to existing database with stale schema could silently fail to apply schema, causing crashes
+- Priority: High — affects reliability on repeated deployments
 
 ---
 
-*Concerns audit: 2026-03-25*
+*Concerns audit: 2026-04-02*
