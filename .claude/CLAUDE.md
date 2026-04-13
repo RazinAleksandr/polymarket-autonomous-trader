@@ -49,3 +49,21 @@ Two research docs in `.planning/research/` propose the highest-leverage improvem
 - **BM25 memory retrieval** (per-category lessons retrieved by similarity, not just recency)
 
 Both are transplantable from the TradingAgents reference project. See `TRADINGAGENTS-INTEGRATION-PLAN.md` for the concrete plan.
+
+## GSD Workflow
+
+`.planning/` is a GSD (Get Shit Done) workspace. Route development work through GSD commands so planning artifacts stay in sync with the code.
+
+Common entry points:
+- `/gsd:stats` — project stats, phase/plan progress
+- `/gsd:progress` — check current state and route to next action
+- `/gsd:quick` — small fixes, doc updates, ad-hoc tasks
+- `/gsd:fast` — trivial inline tasks (no planning overhead)
+- `/gsd:new-milestone` — start a new milestone (e.g., v2.0 for TradingAgents integration)
+- `/gsd:add-phase` — add a phase to the active milestone
+- `/gsd:plan-phase` — create a detailed phase plan
+- `/gsd:execute-phase` — execute planned phase work
+- `/gsd:debug` — investigation and bug fixing
+- `/gsd:help` — full command list
+
+Do not make direct repo edits outside a GSD workflow unless explicitly asked to bypass it.
