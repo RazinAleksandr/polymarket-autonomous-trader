@@ -2,47 +2,91 @@
 
 This repo contains the autonomous Polymarket trading system plus its planning and design history.
 
+**For the full trading agent documentation, see [`src/README.md`](src/README.md).**
+
 ## Structure
 
 ```
 .
-├── .claude/                        # Outer claude config (for working on this repo)
-├── .planning/                      # Outer GSD workspace — design, research, restructure plans
+├── .claude/                        # Outer claude config (guides repo-level dev sessions)
+├── .planning/                      # Outer GSD workspace — see section below
 ├── FINAL_SYSTEM_DESIGN.md          # Master design doc that drove the build
 ├── PROJECT_COMPARISON_REPORT.md    # Comparison of the 3 source projects
+├── README.md                       # This file
 └── src/                            # The trading system itself
-    ├── .claude/                    # Trading agent's instructions (CLAUDE.md + skills)
-    ├── .planning/                  # Trading system's GSD build history (4 phases, 15 plans)
+    ├── .claude/                    # Trading agent's instructions (CLAUDE.md + 6 skills)
+    ├── CLAUDE.md
     ├── README.md                   # Full trading agent docs — START HERE
-    ├── docs/                       # Detailed docs (real results, architecture, live trading)
+    ├── docs/                       # Real results, architecture, live trading, scheduling
     ├── lib/                        # Core Python library (config, db, strategy, calibration)
     ├── tools/                      # CLI tools the agent calls via bash
     ├── scripts/                    # Operator scripts (cron, heartbeat, setup)
-    ├── knowledge/                  # Agent's accumulated wisdom (golden rules, calibration, playbooks)
+    ├── knowledge/                  # Golden rules, calibration, category playbooks
     ├── state/                      # Runtime state (strategy, reports, bankroll)
-    ├── tests/                      # Pytest suite
-    └── tests/                      # 24 test modules
+    ├── tests/                      # Pytest suite (24+ modules)
+    ├── reset_agent.sh              # Manual reset utility
+    ├── setup_wallet.py             # One-time wallet setup for live trading
+    ├── pytest.ini
+    └── requirements.txt
 ```
 
-## For the full trading agent documentation, see [`src/README.md`](src/README.md).
+## `.planning/` — Outer Planning Workspace
 
-## Sibling reference projects
+GSD (Get Shit Done) workspace that tracks system-level design, build history, and forward-looking research. Entry points for a new agent session:
+
+- **`PROJECT.md`** — start here. Project overview, current live state, validated requirements, what's next.
+- **`STATE.md`** — live execution status (cycle count, P&L, recent changes).
+- **`ROADMAP.md`** — 6-phase roadmap, all complete.
+
+```
+.planning/
+├── PROJECT.md              Live overview with current state (read first)
+├── STATE.md                Execution state, cron schedule, real P&L
+├── ROADMAP.md              6 phases, all complete
+├── REQUIREMENTS.md         Full requirements list
+├── config.json             GSD config
+│
+├── codebase/               Reference docs about the src/ codebase
+│   ├── ARCHITECTURE.md
+│   ├── CONCERNS.md
+│   ├── CONVENTIONS.md
+│   ├── INTEGRATIONS.md
+│   ├── STACK.md
+│   ├── STRUCTURE.md
+│   └── TESTING.md
+│
+├── phases/                 Historical build record — all 6 phases shipped
+│   ├── 01-single-agent-architecture/       2 plans
+│   ├── 02-knowledge-base-safety/           3 plans
+│   ├── 03-new-instrument-tools/            3 plans
+│   ├── 04-config-integration/              2 plans
+│   ├── 05-autonomous-cycle-validation/     3 plans
+│   └── 06-scheduling-paper-validation/     3 plans
+│
+└── research/               Forward-looking research for v2.0
+    ├── TRADINGAGENTS-COMPARISON.md         Full comparison with TradingAgents framework
+    └── TRADINGAGENTS-INTEGRATION-PLAN.md   Bull/bear debate + BM25 memory integration plan
+```
+
+Each phase folder has: `XX-YY-PLAN.md` + `XX-YY-SUMMARY.md` per plan, plus phase-level `CONTEXT.md`, `DISCUSSION-LOG.md`, optional `RESEARCH.md` / `VALIDATION.md` / `VERIFICATION.md`.
+
+## Sibling Reference Projects
 
 When this repo is checked out at `/home/trader/` level, these sibling directories are reference-only (gitignored):
 
-- `AI-Trader/` — best platform infrastructure
-- `polymarket-agent/` — best architecture & safety
-- `polymarket_claude/` — best trading knowledge & strategy
-- `TradingAgents/` — multi-agent debate framework (research target for future integration)
-- `Vibe-Trading/` — additional patterns
+- `AI-Trader/` — best platform infrastructure (macro regime, ETF flows, news sentiment)
+- `polymarket-agent/` — best architecture & safety (Python tools, SQLite, live CLOB integration)
+- `polymarket_claude/` — best trading knowledge (golden rules, calibration, category playbooks)
+- `TradingAgents/` — multi-agent debate framework (research target for v2.0 integration)
+- `Vibe-Trading/` — additional patterns (bull/bear debate structure, context compression)
 
-See [`PROJECT_COMPARISON_REPORT.md`](PROJECT_COMPARISON_REPORT.md) for the full comparison and [`FINAL_SYSTEM_DESIGN.md`](FINAL_SYSTEM_DESIGN.md) for the design.
+See [`PROJECT_COMPARISON_REPORT.md`](PROJECT_COMPARISON_REPORT.md) for the full comparison and [`FINAL_SYSTEM_DESIGN.md`](FINAL_SYSTEM_DESIGN.md) for the design that drove the build.
 
-## Two-level development
+## Two-Level Development
 
 This repo holds two concerns:
 
-1. **Outer (this level)** — designing, restructuring, and researching the trading system. Use `.planning/` for GSD workspace.
-2. **Inner (`src/`)** — the actual autonomous trading agent. Has its own Claude instructions (`src/.claude/`) and its own GSD build history (`src/.planning/`).
+1. **Outer (this level)** — designing, planning, researching the trading system. Uses `.planning/` as GSD workspace and `.claude/CLAUDE.md` to guide dev sessions.
+2. **Inner (`src/`)** — the actual autonomous trading agent that runs on cron. Has its own `.claude/CLAUDE.md` (5-phase trading cycle instructions), 6 skill docs, and runtime state.
 
-Work on the trading agent happens inside `src/`. Work on system-level design happens at the outer level.
+Work on the trading agent itself happens inside `src/`. Work on system-level design, research, or new phase planning happens at the outer level.
