@@ -1,5 +1,9 @@
 # Autonomous Polymarket Trading Agent — Final System Design
 
+> **HISTORICAL DOCUMENT** — This is the original design doc that drove the v1.0 build (March-April 2026). The system has since been built and is running. For current live state see `.planning/PROJECT.md` and `src/README.md`. Some references (e.g. `strategies.md`, `edge-sources.md`) describe planned files that were later removed as redundant.
+
+---
+
 ## Core Philosophy
 
 **Claude IS the trader.** Not a bot with hardcoded rules. Not a Python program that follows if/else logic. Claude Code runs autonomously, makes all trading decisions through its own reasoning, and evolves its own strategy by reading outcomes and rewriting its own instructions.

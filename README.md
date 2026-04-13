@@ -10,8 +10,6 @@ This repo contains the autonomous Polymarket trading system plus its planning an
 .
 ├── .claude/                        # Outer claude config (guides repo-level dev sessions)
 ├── .planning/                      # Outer GSD workspace — see section below
-├── FINAL_SYSTEM_DESIGN.md          # Master design doc that drove the build
-├── PROJECT_COMPARISON_REPORT.md    # Comparison of the 3 source projects
 ├── README.md                       # This file
 └── src/                            # The trading system itself
     ├── .claude/                    # Trading agent's instructions (CLAUDE.md + 6 skills)
@@ -63,9 +61,11 @@ GSD (Get Shit Done) workspace that tracks system-level design, build history, an
 │   ├── 05-autonomous-cycle-validation/     3 plans
 │   └── 06-scheduling-paper-validation/     3 plans
 │
-└── research/               Forward-looking research for v2.0
-    ├── TRADINGAGENTS-COMPARISON.md         Full comparison with TradingAgents framework
-    └── TRADINGAGENTS-INTEGRATION-PLAN.md   Bull/bear debate + BM25 memory integration plan
+└── research/               Historical and forward-looking research
+    ├── FINAL_SYSTEM_DESIGN.md              [HISTORICAL] Original design doc that drove the build
+    ├── PROJECT_COMPARISON_REPORT.md        [HISTORICAL] Comparison of the 3 source projects
+    ├── TRADINGAGENTS-COMPARISON.md         [FORWARD]    Comparison with TradingAgents framework
+    └── TRADINGAGENTS-INTEGRATION-PLAN.md   [FORWARD]    Bull/bear debate + BM25 memory plan
 ```
 
 Each phase folder has: `XX-YY-PLAN.md` + `XX-YY-SUMMARY.md` per plan, plus phase-level `CONTEXT.md`, `DISCUSSION-LOG.md`, optional `RESEARCH.md` / `VALIDATION.md` / `VERIFICATION.md`.
@@ -80,7 +80,7 @@ When this repo is checked out at `/home/trader/` level, these sibling directorie
 - `TradingAgents/` — multi-agent debate framework (research target for v2.0 integration)
 - `Vibe-Trading/` — additional patterns (bull/bear debate structure, context compression)
 
-See [`PROJECT_COMPARISON_REPORT.md`](PROJECT_COMPARISON_REPORT.md) for the full comparison and [`FINAL_SYSTEM_DESIGN.md`](FINAL_SYSTEM_DESIGN.md) for the design that drove the build.
+See [`.planning/research/PROJECT_COMPARISON_REPORT.md`](.planning/research/PROJECT_COMPARISON_REPORT.md) for the full source-project comparison and [`.planning/research/FINAL_SYSTEM_DESIGN.md`](.planning/research/FINAL_SYSTEM_DESIGN.md) for the original design that drove the build. Both are historical — the current live docs are `src/README.md` and `.planning/PROJECT.md`.
 
 ## Two-Level Development
 

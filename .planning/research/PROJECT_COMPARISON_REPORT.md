@@ -1,5 +1,9 @@
 # Polymarket Autonomous Trading Agent - Project Comparison Report
 
+> **HISTORICAL DOCUMENT** — This analysis of 3 source projects (polymarket-agent, polymarket_claude, AI-Trader) drove the decision to cherry-pick architecture from one, knowledge from another, and market intelligence from the third. Those decisions are now baked into the current system. Kept for reference on why the architecture looks the way it does.
+
+---
+
 ## Executive Summary
 
 Three projects were analyzed for building an autonomous Polymarket trading agent. Each takes a fundamentally different approach:
